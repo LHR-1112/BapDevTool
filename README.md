@@ -2,8 +2,8 @@
 
 基于原有 Eclipse 云开发插件重构的 **IntelliJ IDEA** 版本。
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/your-repo/bapdevtools?style=for-the-badge)](https://github.com/your-repo/bapdevtools/releases)
-[![IntelliJ Platform Plugin](https://img.shields.io/jetbrains/plugin/d/your-plugin-id?style=for-the-badge)](https://plugins.jetbrains.com/plugin/your-plugin-id)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/your-repo/bapdevtools?style=for-the-badge)](https://github.com/LHR-1112/BapDevTool/releases)
+[![IntelliJ Platform Plugin](https://img.shields.io/jetbrains/plugin/d/your-plugin-id?style=for-the-badge)](https://plugins.jetbrains.com/plugin/com.bap.dev.BapDevPlugin)
 
 ---
 
