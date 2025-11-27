@@ -14,7 +14,6 @@ public class test1 {
             CJavaCode javaCode = client.getService().getJavaCode(projectUuid, "practicalTool.utils.PracticalToolUtils");
             System.out.println(GsonUtil.toJson(javaCode));
 
-
             System.out.println("ok");
         } catch (Exception e) {
             System.out.println(ToolUtilities.getFullExceptionStack(e));
