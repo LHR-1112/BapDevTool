@@ -1,0 +1,52 @@
+package com.bap.dev.action;
+
+import bap.java.CJavaConst;
+import com.bap.dev.handler.RelocateHandler;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.vfs.VirtualFile;
+import org.jetbrains.annotations.NotNull;
+
+public class RelocateProjectAction extends AnAction {
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+        Project project = e.getProject();
+        VirtualFile selectedFile = e.getData(CommonDataKeys.VIRTUAL_FILE);
+
+        if (project == null || selectedFile == null) return;
+
+        VirtualFile moduleRoot = findModuleRoot(selectedFile);
+        if (moduleRoot == null) {
+            Messages.showWarningDialog("请在 Bap 模块内使用此功能 (未找到 .develop 配置)。", "提示");
+            return;
+        }
+
+        RelocateHandler.relocate(project, moduleRoot);
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+        VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
+        e.getPresentation().setEnabledAndVisible(file != null);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
+
+    private VirtualFile findModuleRoot(VirtualFile current) {
+        VirtualFile dir = current.isDirectory() ? current : current.getParent();
+        while (dir != null) {
+            VirtualFile configFile = dir.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+            if (configFile != null && configFile.exists()) return dir;
+            dir = dir.getParent();
+        }
+        return null;
+    }
+}
