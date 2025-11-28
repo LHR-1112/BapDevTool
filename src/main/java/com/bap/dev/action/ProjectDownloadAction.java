@@ -3,7 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaProjectDto;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectDownloader;
-import com.bap.dev.ui.LogonDialog; // 使用通用的登录弹窗
+import com.bap.dev.ui.LogonDialog;
 import com.bap.dev.ui.ProjectDownloadDialog;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
@@ -172,11 +172,7 @@ public class ProjectDownloadAction extends AnAction {
         });
     }
 
-    // ... 下面的 configureModuleStructure, createRunConfiguration 等辅助方法完全保持不变 ...
-    // (为了节省篇幅，请保留你原文件中的这些方法，不需要修改)
-
     private void configureModuleStructure(Project project, VirtualFile newModuleDirVFile, File newModuleDirIo, String projectName) {
-        // ... 保持原代码不变 ...
         try {
             WriteAction.run(() -> {
                 if (project.isDisposed()) return;
@@ -209,6 +205,41 @@ public class ProjectDownloadAction extends AnAction {
                     addFolderJarsToLibrary(model, newModuleDirVFile, "lib/plugin");
                     addFolderJarsToLibrary(model, newModuleDirVFile, "lib/project");
 
+                    // --- 🔴 新增：配置编译输出路径 ---
+                    CompilerModuleExtension extension = model.getModuleExtension(CompilerModuleExtension.class);
+                    if (extension != null) {
+                        // 1. 勾选“使用模块编译输出路径” (不继承项目路径)
+                        extension.inheritCompilerOutputPath(false);
+
+                        // 2. 勾选“排除输出目录”
+                        extension.setExcludeOutput(true);
+
+                        // 3. 设置输出目录为 "模块目录/bin"
+                        File binDir = new File(newModuleDirIo, "bin");
+                        if (!binDir.exists()) {
+                            binDir.mkdirs(); // 如果 bin 不存在则创建
+                        }
+                        // 刷新并获取 bin 的 VirtualFile
+                        VirtualFile binVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(binDir);
+
+                        // 4. 设置测试输出目录为 "模块目录/test"
+                        File testDir = new File(newModuleDirIo, "test"); // 新增：测试输出目录
+                        if (!testDir.exists()) {
+                            testDir.mkdirs(); // 新增：如果 test 不存在则创建
+                        }
+                        // 刷新并获取 test 的 VirtualFile
+                        VirtualFile testVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(testDir); // 新增
+
+                        if (binVFile != null) {
+                            extension.setCompilerOutputPath(binVFile);
+                        }
+
+                        if (testVFile != null) {
+                            extension.setCompilerOutputPathForTests(testVFile); // 🔴 修改：测试输出设为 test
+                        }
+                    }
+                    // ------------------------------
+
                     Sdk projectSdk = ProjectRootManager.getInstance(project).getProjectSdk();
                     if (projectSdk != null) {
                         model.setSdk(projectSdk);
@@ -221,7 +252,7 @@ public class ProjectDownloadAction extends AnAction {
 
                     sendNotification(project, "下载并配置成功",
                             "模块 <b>" + projectName + "</b> 已创建。<br/>" +
-                                    "依赖库已加载，运行配置已自动生成。",
+                                    "编译路径已设为 bin，依赖库已加载。",
                             NotificationType.INFORMATION);
 
                 } catch (Exception e) {
@@ -238,7 +269,6 @@ public class ProjectDownloadAction extends AnAction {
     private void createRunConfiguration(Project project, Module module, String name, String workingDir) {
         RunManager runManager = RunManager.getInstance(project);
         ApplicationConfigurationType type = ConfigurationTypeUtil.findConfigurationType(ApplicationConfigurationType.class);
-        if (type == null) return;
         ConfigurationFactory factory = type.getConfigurationFactories()[0];
         RunnerAndConfigurationSettings settings = runManager.createConfiguration(name, factory);
         ApplicationConfiguration appConfig = (ApplicationConfiguration) settings.getConfiguration();
