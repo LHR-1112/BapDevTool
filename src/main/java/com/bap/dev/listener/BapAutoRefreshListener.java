@@ -1,6 +1,7 @@
 package com.bap.dev.listener;
 
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.settings.BapSettingsState; // 引入配置类
 import com.bap.dev.util.BapUtils;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -17,7 +18,6 @@ import java.util.Set;
 
 public class BapAutoRefreshListener implements BulkFileListener {
 
-    // 1. 添加日志记录器，方便在 IDEA 的 "Run" 或 "Debug" 控制台看输出
     private static final Logger LOG = Logger.getInstance(BapAutoRefreshListener.class);
 
     private final Project project;
@@ -25,16 +25,20 @@ public class BapAutoRefreshListener implements BulkFileListener {
 
     public BapAutoRefreshListener(Project project) {
         this.project = project;
-        // 修正点：使用 SWING_THREAD (即 UI 线程/EDT)
         this.debounceAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, project);
     }
 
     @Override
     public void after(@NotNull List<? extends VFileEvent> events) {
+        // --- 🔴 核心检查：如果开关未开启，直接返回 ---
+        if (!BapSettingsState.getInstance().autoRefresh) {
+            return;
+        }
+        // ----------------------------------------
+
         Set<VirtualFile> modulesToRefresh = new HashSet<>();
 
         for (VFileEvent event : events) {
-            // 3. 只要不是内容修改事件，通常忽略（防止文件属性变化也触发）
             if (!(event instanceof VFileContentChangeEvent)) {
                 continue;
             }
@@ -42,11 +46,12 @@ public class BapAutoRefreshListener implements BulkFileListener {
             VirtualFile file = event.getFile();
             if (file == null || !file.isValid()) continue;
 
-            // LOG.info("检测到文件变化: " + file.getPath()); // 调试时可开启
-
+            // 辅助方法: 从文件向上查找模块根目录(包含.develop)
+            // 注意：这里假设你有 BapUtils.findModuleRoot 方法，如果没有，请直接把方法体复制进来
             VirtualFile moduleRoot = BapUtils.findModuleRoot(file);
+
             if (moduleRoot != null) {
-                LOG.info("找到所属模块，准备刷新: " + moduleRoot.getName());
+                System.out.println("检测到变更，准备自动刷新: " + moduleRoot.getName());
                 modulesToRefresh.add(moduleRoot);
             }
         }
@@ -59,20 +64,21 @@ public class BapAutoRefreshListener implements BulkFileListener {
     private void scheduleRefresh(Set<VirtualFile> modules) {
         debounceAlarm.cancelAllRequests();
         debounceAlarm.addRequest(() -> {
-            // 4. 再次确认 Project 没被关闭
             if (project.isDisposed()) return;
 
-            LOG.info(">>> 执行防抖后的自动刷新 <<<");
+            // 二次检查：防止在防抖期间用户关闭了开关
+            if (!BapSettingsState.getInstance().autoRefresh) return;
+
+            System.out.println(">>> 执行自动刷新 <<<");
 
             ProjectRefresher refresher = new ProjectRefresher(project);
             for (VirtualFile moduleRoot : modules) {
-                // 必须放在 try-catch 里，防止一个错误导致后续都不执行
                 try {
                     refresher.refreshModule(moduleRoot);
                 } catch (Exception e) {
                     LOG.error("自动刷新模块失败: " + moduleRoot.getName(), e);
                 }
             }
-        }, 500);
+        }, 1000); // 设置 1秒 防抖延迟，避免频繁触发
     }
 }

@@ -10,15 +10,15 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.util.ArrayList;
-import java.util.List;
 
 public class BapSettingsConfigurable implements Configurable {
 
     private JCheckBox compileOnPublishCheckbox;
+    // --- 🔴 新增 ---
+    private JCheckBox autoRefreshCheckbox;
+    // -------------
 
-    // 列表数据模型
     private final CollectionListModel<String> uriListModel = new CollectionListModel<>();
-    // 列表 UI 组件
     private final JBList<String> uriList = new JBList<>(uriListModel);
 
     @Override
@@ -30,10 +30,13 @@ public class BapSettingsConfigurable implements Configurable {
     public @Nullable JComponent createComponent() {
         compileOnPublishCheckbox = new JCheckBox("发布时自动编译 (Rebuild All on Publish)");
 
-        // 创建带工具栏的列表面板 (Add, Remove, Move Up, Move Down)
+        // --- 🔴 新增复选框 ---
+        autoRefreshCheckbox = new JCheckBox("自动刷新文件状态 (Auto Refresh File Status)");
+        autoRefreshCheckbox.setToolTipText("开启后，文件修改保存时会自动触发云端比对（可能会有网络延迟）");
+        // -------------------
+
         JPanel uriListPanel = ToolbarDecorator.createDecorator(uriList)
                 .setAddAction(button -> {
-                    // 点击添加按钮的处理
                     String input = JOptionPane.showInputDialog("Enter Server URI:");
                     if (input != null && !input.trim().isEmpty()) {
                         uriListModel.add(input.trim());
@@ -43,6 +46,7 @@ public class BapSettingsConfigurable implements Configurable {
 
         return FormBuilder.createFormBuilder()
                 .addComponent(compileOnPublishCheckbox)
+                .addComponent(autoRefreshCheckbox) // 添加到面板
                 .addSeparator()
                 .addLabeledComponentFillVertically("Server URI History:", uriListPanel)
                 .getPanel();
@@ -53,17 +57,21 @@ public class BapSettingsConfigurable implements Configurable {
         BapSettingsState settings = BapSettingsState.getInstance();
 
         boolean checkboxModified = compileOnPublishCheckbox.isSelected() != settings.compileOnPublish;
+        // --- 🔴 检查修改 ---
+        boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
+        // ------------------
         boolean listModified = !uriListModel.getItems().equals(settings.uriHistory);
 
-        return checkboxModified || listModified;
+        return checkboxModified || autoRefreshModified || listModified;
     }
 
     @Override
     public void apply() {
         BapSettingsState settings = BapSettingsState.getInstance();
         settings.compileOnPublish = compileOnPublishCheckbox.isSelected();
-
-        // 保存 List (深拷贝一份，防止引用问题)
+        // --- 🔴 保存 ---
+        settings.autoRefresh = autoRefreshCheckbox.isSelected();
+        // -------------
         settings.uriHistory = new ArrayList<>(uriListModel.getItems());
     }
 
@@ -71,8 +79,10 @@ public class BapSettingsConfigurable implements Configurable {
     public void reset() {
         BapSettingsState settings = BapSettingsState.getInstance();
         compileOnPublishCheckbox.setSelected(settings.compileOnPublish);
+        // --- 🔴 重置 ---
+        autoRefreshCheckbox.setSelected(settings.autoRefresh);
+        // -------------
 
-        // 重置 List 数据
         uriListModel.removeAll();
         uriListModel.addAll(0, settings.uriHistory);
     }
@@ -80,5 +90,6 @@ public class BapSettingsConfigurable implements Configurable {
     @Override
     public void disposeUIResources() {
         compileOnPublishCheckbox = null;
+        autoRefreshCheckbox = null;
     }
 }
