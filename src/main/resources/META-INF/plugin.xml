@@ -104,6 +104,20 @@
 
             <separator/>
 
+            <action id="com.bap.dev.action.ShowProjectHistoryAction"
+                    class="com.bap.dev.action.ShowProjectHistoryAction"
+                    text="Show Project History"
+                    description="View history of all files in project"
+                    icon="AllIcons.Vcs.History"/>
+
+            <action id="com.bap.dev.action.ShowHistoryAction"
+                    class="com.bap.dev.action.ShowHistoryAction"
+                    text="Show History"
+                    description="View cloud version history"
+                    icon="AllIcons.Vcs.History"/>
+
+            <separator/>
+
             <action id="com.bap.dev.action.CommitAllAction"
                     class="com.bap.dev.action.CommitAllAction"
                     text="Commit All"
