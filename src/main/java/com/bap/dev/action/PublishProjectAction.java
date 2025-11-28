@@ -75,21 +75,24 @@ public class PublishProjectAction extends AnAction {
             indicator.setText("Connecting to server...");
             client.connect(uri, user, pwd);
 
-            // --- 🔴 核心修改 START ---
-            // 读取全局配置
-            boolean needCompile = BapSettingsState.getInstance().compileOnPublish;
+            // 读取全局配置: "发布时自动编译"
+            boolean compileOnPublish = BapSettingsState.getInstance().compileOnPublish;
 
-            if (needCompile) {
+            if (compileOnPublish) {
+                // 如果配置为自动编译，则执行 rebuildAll
                 indicator.setText("Rebuilding project (" + projectUuid + ")...");
                 client.getService().rebuildAll(projectUuid);
             } else {
                 indicator.setText("Skipping rebuild (See Bap Settings)...");
             }
-            // --- 🔴 核心修改 END ---
 
             // 3. 执行 Export Plugin
             indicator.setText("Exporting to plugin...");
-            client.getService().exportProject2Plugin(projectUuid, null, true, false);
+
+            // 逻辑：如果自动编译(true) -> 就不忽略错误(false)；如果不自动编译(false) -> 就忽略错误(true)
+            boolean ignoreCompileError = !compileOnPublish;
+
+            client.getService().exportProject2Plugin(projectUuid, null, true, ignoreCompileError);
 
             // 4. 成功通知
             sendNotification(project, "发布成功", "项目已成功重新编译并导出插件。");
