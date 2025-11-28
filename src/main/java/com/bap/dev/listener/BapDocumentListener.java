@@ -1,6 +1,7 @@
 package com.bap.dev.listener;
 
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.settings.BapSettingsState;
 import com.bap.dev.util.BapUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
@@ -25,6 +26,11 @@ public class BapDocumentListener implements DocumentListener {
 
     @Override
     public void documentChanged(@NotNull DocumentEvent event) {
+        // --- 🔴 核心检查：如果开关未开启，直接返回 ---
+        if (!BapSettingsState.getInstance().autoRefresh) {
+            return;
+        }
+
         // 1. 获取当前被修改的文档
         Document document = event.getDocument();
 
@@ -51,6 +57,9 @@ public class BapDocumentListener implements DocumentListener {
         // 时间太短会导致用户还在思考时就刷新，太长则反应迟钝。建议 500ms - 1500ms。
         debounceAlarm.addRequest(() -> {
             if (project.isDisposed()) return;
+
+            // 二次检查：防止在防抖期间用户关闭了开关
+            if (!BapSettingsState.getInstance().autoRefresh) return;
 
             // 执行刷新逻辑
             // 注意：此时文件内容还在内存中，没有保存到磁盘！

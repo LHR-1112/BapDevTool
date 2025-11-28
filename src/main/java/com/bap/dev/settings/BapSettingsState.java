@@ -19,7 +19,10 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
 
     public boolean compileOnPublish = true;
 
-    // 新增：URI 历史记录列表
+    // --- 🔴 新增：自动刷新开关 ---
+    public boolean autoRefresh = false; // 默认为 false
+    // ----------------------------
+
     public List<String> uriHistory = new ArrayList<>();
 
     public static BapSettingsState getInstance() {
@@ -36,16 +39,11 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
         XmlSerializerUtil.copyBean(state, this);
     }
 
-    /**
-     * 辅助方法：添加 URI 到历史记录 (置顶 + 去重 + 限制数量)
-     */
     public void addUriToHistory(String uri) {
         if (uri == null || uri.trim().isEmpty()) return;
-
-        uriHistory.remove(uri); // 如果已存在，先移除
-        uriHistory.add(0, uri); // 加到最前面
-
-        if (uriHistory.size() > 20) { // 限制保留最近 20 条
+        uriHistory.remove(uri);
+        uriHistory.add(0, uri);
+        if (uriHistory.size() > 20) {
             uriHistory = new ArrayList<>(uriHistory.subList(0, 20));
         }
     }
