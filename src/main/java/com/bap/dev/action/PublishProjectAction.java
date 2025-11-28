@@ -17,6 +17,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.leavay.common.util.ToolUtilities;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -99,7 +100,7 @@ public class PublishProjectAction extends AnAction {
 
         } catch (Exception e) {
             e.printStackTrace();
-            showError("发布失败: " + e.getMessage());
+            sendNotification(project, "发布失败或存在编译报错", ToolUtilities.getFullExceptionStack(e));
         } finally {
             client.shutdown();
         }
