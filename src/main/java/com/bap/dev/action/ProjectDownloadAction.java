@@ -252,7 +252,7 @@ public class ProjectDownloadAction extends AnAction {
 
                     sendNotification(project, "下载并配置成功",
                             "模块 <b>" + projectName + "</b> 已创建。<br/>" +
-                                    "编译路径已设为 bin，依赖库已加载。",
+                                    "编译路径已设置，依赖库已加载。",
                             NotificationType.INFORMATION);
 
                 } catch (Exception e) {
