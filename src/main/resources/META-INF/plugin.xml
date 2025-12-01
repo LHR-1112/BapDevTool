@@ -2,12 +2,14 @@
     <id>com.bap.dev.BapDevPlugin</id>
     <name>BapDevPlugin</name>
     <version>1.1</version>
+
     <vendor email="2991747768@qq.com">LHR_1112</vendor>
 
     <resource-bundle>messages.PluginBundle</resource-bundle>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.bap.dev.settings.BapSettingsState"/>
