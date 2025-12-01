@@ -19,11 +19,13 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.net.URI; // 引入 URI 类
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,7 +41,7 @@ public class AdminToolLauncher {
 
         try {
             // 1. 读取配置
-            String content = new String(Files.readAllBytes(confFile.toPath()), "UTF-8");
+            String content = new String(Files.readAllBytes(confFile.toPath()), StandardCharsets.UTF_8);
             String uriStr = extractAttr(content, "Uri"); // 比如 ws://127.0.0.1:2020
             String user = extractAttr(content, "User");
             String pwd = extractAttr(content, "Password");
@@ -62,6 +64,12 @@ public class AdminToolLauncher {
             }
             params.setJdk(projectSdk);
             params.setMainClass(adminTool);
+
+            // --- ✅ 新增：强制关闭 Headless 模式，允许 GUI 显示 ---
+            params.getVMParametersList().add("-Djava.awt.headless=false");
+
+            // --- ✅ 新增：显式设置工作目录 ---
+            params.setWorkingDirectory(moduleRoot.getPath());
 
             // --- 🔴 核心修复：解析 URI 并拆分参数以匹配 BapMainFrame 的要求 ---
             // BapMainFrame main(args) 要求: args[0]=host, args[1]=port, args[2]=path, args[3]=user, args[4]=pwd
@@ -96,10 +104,19 @@ public class AdminToolLauncher {
             GeneralCommandLine commandLine = params.toCommandLine();
             OSProcessHandler handler = new OSProcessHandler(commandLine);
 
+            // --- ✅ 新增：监听输出流 ---
             handler.addProcessListener(new ProcessAdapter() {
                 @Override
+                public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+                    // 将子进程的输出打印到 IDEA 的 Log 中，或者如果您有 ConsoleView 可以打印到那里
+                    // 这里为了简单，先打印到系统控制台（在 IDEA 的 idea.log 或启动终端可见）
+                    System.out.println("[AdminTool] " + event.getText());
+                }
+
+                @Override
                 public void processTerminated(@NotNull ProcessEvent event) {
-                    sendNotification(project, "管理工具已关闭", "管理工具已关闭 (Target: " + host + ":" + port + ")");
+                    String msg = "管理工具已关闭 (Exit Code: " + event.getExitCode() + ")";
+                    sendNotification(project, "管理工具已关闭", msg);
                 }
             });
 
