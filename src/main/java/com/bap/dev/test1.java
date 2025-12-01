@@ -1,5 +1,7 @@
 package com.bap.dev;
 
+import bap.java.CJavaCode;
+import bap.java.CommitPackage;
 import bap.md.yun.ArtifactDefine;
 import com.leavay.common.util.GsonUtil;
 import com.leavay.common.util.ToolUtilities;
@@ -14,10 +16,20 @@ public class test1 {
 
             BapRpcClient client = new BapRpcClient();
             client.connect("ws://175.178.82.117:2020", "root", "public");
+            CJavaCode javaCode = client.getService().getJavaCode(projectUuid, fullClassName);
+            String code = javaCode.getCode();
+            code = code.replace("初始化", "初始化1");
 
-            List<ArtifactDefine> artifactDefines = client.getService().queryInstalledArtifacts(true);
-            System.out.println(GsonUtil.toJson(artifactDefines));
+            Map<String, List<CJavaCode>> codeMap = new HashMap<>();
+            codeMap.put("src", Collections.singletonList(javaCode));
 
+
+            javaCode.setCode(code);
+            CommitPackage commitPackage = new CommitPackage();
+            commitPackage.setComments("提交测试");
+            commitPackage.setMapFolder2Codes(codeMap);
+
+            client.getService().commitCode(projectUuid, commitPackage);
 
             System.out.println("ok");
         } catch (Exception e) {
