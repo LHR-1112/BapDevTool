@@ -3,14 +3,12 @@ package com.bap.dev.action;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import bap.java.CJavaFolderDto;
-import bap.md.java.CJavaProject;
-import bap.md.java.CResFileDo;
+import bap.java.CommitPackage;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
-import com.cdao.impl.entity.field.GID;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -27,6 +25,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -40,9 +39,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,19 +58,15 @@ public class CommitAllAction extends AnAction {
             return;
         }
 
-        // 1. 启动后台任务
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Preparing Commit...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setIndeterminate(true);
-
-                    // A. 强制刷新文件状态
                     indicator.setText("Refreshing module status...");
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     refresher.refreshModule(moduleRoot);
 
-                    // B. 收集所有变动文件
                     indicator.setText("Collecting changes...");
                     List<VirtualFile> changedFiles = collectChangedFiles(project, moduleRoot);
 
@@ -82,10 +75,12 @@ public class CommitAllAction extends AnAction {
                         return;
                     }
 
-                    // C. 弹出确认框
                     ApplicationManager.getApplication().invokeLater(() -> {
                         if (showConfirmDialog(project, changedFiles)) {
-                            startBatchCommit(project, moduleRoot, changedFiles);
+                            String comments = Messages.showInputDialog(project, "请输入提交注释:", "Commit All", Messages.getQuestionIcon());
+                            if (comments != null) {
+                                startBatchCommit(project, moduleRoot, changedFiles, comments);
+                            }
                         }
                     });
 
@@ -97,13 +92,11 @@ public class CommitAllAction extends AnAction {
         });
     }
 
-    private void startBatchCommit(Project project, VirtualFile moduleRoot, List<VirtualFile> files) {
+    private void startBatchCommit(Project project, VirtualFile moduleRoot, List<VirtualFile> files, String comments) {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing Files...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = new BapRpcClient();
-                int successCount = 0;
-                int failCount = 0;
                 try {
                     File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
                     String content = Files.readString(confFile.toPath());
@@ -115,159 +108,228 @@ public class CommitAllAction extends AnAction {
                     indicator.setText("Connecting...");
                     client.connect(uri, user, pwd);
 
-                    // --- 🔴 优化：一次性获取文件夹列表 ---
                     List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
-                    // --------------------------------
 
-                    for (int i = 0; i < files.size(); i++) {
-                        VirtualFile file = files.get(i);
+                    CommitPackage pkg = new CommitPackage();
+                    pkg.setComments(comments);
+                    Map<String, List<CJavaCode>> mapFolder2Codes = new HashMap<>();
+                    Map<String, Set<String>> deleteCodeMap = new HashMap<>();
+                    Map<String, List<CResFileDto>> mapFolder2Files = new HashMap<>();
+                    Map<String, Set<String>> deleteFileMap = new HashMap<>();
+
+                    int count = 0;
+                    for (VirtualFile file : files) {
                         if (indicator.isCanceled()) break;
-                        indicator.setFraction((double) (i + 1) / files.size());
+                        indicator.setFraction((double) ++count / files.size());
                         indicator.setText("Processing " + file.getName() + "...");
-                        try {
-                            // 将 folders 传给处理方法
-                            if (isResourceFile(moduleRoot, file)) {
-                                processSingleResource(project, client, projectUuid, moduleRoot, file, folders);
-                            } else {
-                                processSingleJavaFile(project, client, projectUuid, file, moduleRoot, folders);
-                            }
-                            successCount++;
-                        } catch (Exception ex) {
-                            ex.printStackTrace();
-                            failCount++;
-                            System.err.println("Failed to commit " + file.getName() + ": " + ex.getMessage());
+
+                        if (isResourceFile(moduleRoot, file)) {
+                            prepareResource(project, client, projectUuid, moduleRoot, file, folders, mapFolder2Files, deleteFileMap);
+                        } else {
+                            prepareJava(project, client, projectUuid, moduleRoot, file, folders, mapFolder2Codes, deleteCodeMap);
                         }
                     }
-                    String msg = String.format("提交完成。\n成功: %d\n失败: %d", successCount, failCount);
-                    NotificationType type = failCount > 0 ? NotificationType.WARNING : NotificationType.INFORMATION;
-                    sendNotification(project, "Commit All Result", msg, type);
+
+                    pkg.setMapFolder2Codes(mapFolder2Codes);
+                    pkg.setDeleteCodeMap(deleteCodeMap);
+                    pkg.setMapFolder2Files(mapFolder2Files);
+                    pkg.setDeleteFileMap(deleteFileMap);
+
+                    client.getService().commitCode(projectUuid, pkg);
+                    CommitAllAction.this.onSuccess(project, files);
+
                 } catch (Exception ex) {
-                    showError("批量提交中断: " + ex.getMessage());
+                    ex.printStackTrace();
+                    showError("批量提交失败: " + ex.getMessage());
                 } finally {
                     client.shutdown();
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        new ProjectRefresher(project).refreshModule(moduleRoot);
-                        project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
-                    });
                 }
             }
         });
     }
 
-    // --- 资源文件处理 ---
-    private void processSingleResource(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file, List<CJavaFolderDto> folders) throws Exception {
+    // --- 资源文件准备 (修复版) ---
+    private void prepareResource(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
+                                 List<CJavaFolderDto> folders,
+                                 Map<String, List<CResFileDto>> updateMap,
+                                 Map<String, Set<String>> deleteMap) throws Exception {
+
         BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
         String relativePath = getResourceRelativePath(moduleRoot, file);
-        if (relativePath == null) throw new Exception("无法计算资源路径");
+        if (relativePath == null) return;
 
+        String folderName = "res";
+
+        // 删除逻辑
         if (status == BapFileStatus.DELETED_LOCALLY) {
-            CResFileDto existingDto = client.getService().getResFile(projectUuid, relativePath, false);
-            if (existingDto != null) {
-                client.getService().deleteResFile(new GID("bap.md.java.CResFileDo", existingDto.getUuid()));
-            }
-            ApplicationManager.getApplication().invokeLater(() -> {
-                try { WriteAction.run(() -> file.delete(this)); } catch (Exception ignore) {}
-            });
+            deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(relativePath);
             return;
         }
 
-        // 使用传入的 folders 列表查找 res
-        CJavaFolderDto resFolder = folders.stream()
-                .filter(item -> "res".equals(item.getName()))
-                .findFirst()
-                .orElse(null);
-        if (resFolder == null) throw new Exception("云端 res 文件夹不存在");
+        // ❌ 移除旧逻辑：if (status == MODIFIED) { deleteMap.add(...) }
 
-        CResFileDto existingDto = client.getService().getResFile(projectUuid, relativePath, false);
-        if (existingDto != null) {
-            client.getService().deleteResFile(new GID("bap.md.java.CResFileDo", existingDto.getUuid()));
-        }
-
+        // 新增/修改逻辑
         byte[] content = file.contentsToByteArray();
-        CResFileDto uploadDto = new CResFileDto();
-        String fileName = file.getName();
-        String filePackage = "";
+        CResFileDto dto = new CResFileDto();
+        dto.setFilePackage(relativePath);
+        dto.setFileName(file.getName());
+
         int lastSlash = relativePath.lastIndexOf('/');
         if (lastSlash >= 0) {
-            filePackage = relativePath.substring(0, lastSlash).replace('/', '.');
+            dto.setFilePackage(relativePath.substring(0, lastSlash).replace('/', '.'));
         }
-        uploadDto.setFileName(fileName);
-        uploadDto.setFilePackage(filePackage);
-        uploadDto.setOwner(resFolder.getUuid());
-        uploadDto.setFileBin(content);
-        uploadDto.setSize((long) content.length);
 
-        client.getService().importResFile(new GID("bap.md.java.CJavaProject", projectUuid), uploadDto);
-        BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
+        dto.setFileBin(content);
+        dto.setSize((long) content.length);
+
+        String ownerUuid = findFolderUuid(folders, folderName);
+        if (ownerUuid != null) dto.setOwner(ownerUuid);
+
+        // --- 🔴 关键：查询并复用 UUID ---
+        CResFileDto existing = client.getService().getResFile(projectUuid, relativePath, false);
+        if (existing != null) {
+            dto.setUuid(existing.getUuid());
+        }
+        // ------------------------------
+
+        updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(dto);
     }
 
-    // --- Java 文件处理 ---
-    private void processSingleJavaFile(Project project, BapRpcClient client, String projectUuid, VirtualFile file, VirtualFile moduleRoot, List<CJavaFolderDto> folders) throws Exception {
+    // ... prepareJava, onSuccess, collectChangedFiles 等辅助方法保持不变 ...
+    // 请复制之前的实现
+    private void prepareJava(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
+                             List<CJavaFolderDto> folders,
+                             Map<String, List<CJavaCode>> updateMap,
+                             Map<String, Set<String>> deleteMap) throws Exception {
+
         BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
         String fullClassName = resolveClassName(project, file);
-        if (fullClassName == null) throw new Exception("无法解析类名");
+        if (fullClassName == null) return;
+
+        String folderName = getOwnerFolderName(moduleRoot, file);
+        if (folderName == null) return;
 
         if (status == BapFileStatus.DELETED_LOCALLY) {
-            client.getService().deleteCode(projectUuid, fullClassName, true);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                try { WriteAction.run(() -> file.delete(this)); } catch (Exception ignore) {}
-            });
+            deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(fullClassName);
             return;
         }
 
-        String localContent = new String(file.contentsToByteArray(), StandardCharsets.UTF_8);
-        Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
-        CJavaCode cJavaCode;
+        CJavaCode code = new CJavaCode();
+        code.setProjectUuid(projectUuid);
+        code.setMainClass(file.getNameWithoutExtension());
+        int lastDot = fullClassName.lastIndexOf('.');
+        code.setJavaPackage((lastDot > 0) ? fullClassName.substring(0, lastDot) : "");
 
-        if (remoteObj != null) {
-            if (remoteObj instanceof CJavaCode) {
-                cJavaCode = (CJavaCode) remoteObj;
-            } else {
-                cJavaCode = new CJavaCode();
-                try {
-                    java.lang.reflect.Field fUuid = remoteObj.getClass().getField("uuid");
-                    cJavaCode.setUuid((String) fUuid.get(remoteObj));
-                } catch (Exception ignore) {}
+        String content = new String(file.contentsToByteArray(), StandardCharsets.UTF_8);
+        code.setCode(content);
+
+        String ownerUuid = findFolderUuid(folders, folderName);
+        if (ownerUuid != null) code.setOwner(ownerUuid);
+
+        if (status == BapFileStatus.MODIFIED) {
+            Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
+            if (remoteObj != null && remoteObj instanceof CJavaCode) {
+                code.setUuid(((CJavaCode) remoteObj).getUuid());
             }
-        } else {
-            cJavaCode = new CJavaCode();
-            cJavaCode.setProjectUuid(projectUuid);
-            cJavaCode.setUuid(CmnUtil.allocUUIDWithUnderline());
-
-            cJavaCode.setMainClass(file.getNameWithoutExtension());
-            int lastDot = fullClassName.lastIndexOf('.');
-            cJavaCode.setJavaPackage((lastDot > 0) ? fullClassName.substring(0, lastDot) : "");
-
-            // --- 🔴 核心修复：计算并设置 Owner ---
-            String ownerUuid = findOwnerUuid(moduleRoot, file, folders);
-            if (ownerUuid == null) throw new Exception("无法确定 Owner 文件夹");
-            cJavaCode.setOwner(ownerUuid);
-            // ------------------------------
+        } else if (status == BapFileStatus.ADDED) {
+            code.setUuid(CmnUtil.allocUUIDWithUnderline());
         }
 
-        cJavaCode.setCode(localContent);
-        client.getService().saveJavaCode(cJavaCode, true);
-        BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
+        updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(code);
     }
 
-    // --- 查找 Owner 辅助方法 ---
-    private String findOwnerUuid(VirtualFile moduleRoot, VirtualFile file, List<CJavaFolderDto> folders) {
+    private String getOwnerFolderName(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile srcDir = moduleRoot.findChild("src");
         if (srcDir == null) return null;
-        String path = VfsUtilCore.getRelativePath(file, srcDir); // core/com/pkg/A.java
+        String path = VfsUtilCore.getRelativePath(file, srcDir);
         if (path == null) return null;
         int idx = path.indexOf('/');
-        if (idx <= 0) return null;
-        String folderName = path.substring(0, idx); // core
-
-        return folders.stream()
-                .filter(f -> f.getName().equals(folderName))
-                .map(CJavaFolderDto::getUuid)
-                .findFirst()
-                .orElse(null);
+        return (idx > 0) ? path.substring(0, idx) : path;
     }
 
-    // --- 辅助方法 (保持不变) ---
+    private String findFolderUuid(List<CJavaFolderDto> folders, String name) {
+        return folders.stream().filter(f -> f.getName().equals(name)).map(CJavaFolderDto::getUuid).findFirst().orElse(null);
+    }
+
+    private void onSuccess(Project project, List<VirtualFile> files) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            List<VirtualFile> toDelete = new ArrayList<>();
+
+            for (VirtualFile file : files) {
+                // 1. 必须先获取当前状态，再做处理
+                BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+
+                // 2. 如果是 DELETED_LOCALLY (红D)，加入待删除列表，暂时不重置状态
+                if (status == BapFileStatus.DELETED_LOCALLY) {
+                    toDelete.add(file);
+                }
+                // 3. 如果是普通修改或新增 (M/A)，且文件有效，则立即重置为 NORMAL
+                else if (file.isValid()) {
+                    BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
+                    file.refresh(false, false);
+                }
+            }
+
+            // 4. 统一处理物理删除
+            if (!toDelete.isEmpty()) {
+                try {
+                    WriteAction.run(() -> {
+                        for(VirtualFile f : toDelete) {
+                            // 为了数据一致性，删除前将内部状态置为 Normal
+                            BapFileStatusService.getInstance(project).setStatus(f, BapFileStatus.NORMAL);
+
+                            // 执行物理删除
+                            if(f.isValid()) {
+                                try {
+                                    f.delete(this);
+                                } catch (java.io.IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    });
+                } catch (Exception ignore) {
+                    ignore.printStackTrace();
+                }
+            }
+
+            PsiManager.getInstance(project).dropPsiCaches();
+            FileStatusManager.getInstance(project).fileStatusesChanged();
+
+            sendNotification(project, "提交成功", "已提交 " + files.size() + " 个文件。");
+            project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
+        });
+    }
+
+    private VirtualFile findModuleRoot(VirtualFile current) {
+        VirtualFile dir = current.isDirectory() ? current : current.getParent();
+        while (dir != null) {
+            VirtualFile configFile = dir.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+            if (configFile != null && configFile.exists()) return dir;
+            dir = dir.getParent();
+        }
+        return null;
+    }
+
+    private String extractAttr(String xml, String attr) {
+        Pattern p = Pattern.compile(attr + "=\"([^\"]*)\"");
+        Matcher m = p.matcher(xml);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private void showError(String msg) {
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Commit Error"));
+    }
+
+    private void showInfo(String msg) {
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, "Commit All"));
+    }
+
+    private void sendNotification(Project project, String title, String content) {
+        Notification notification = new Notification("Cloud Project Download", title, content, NotificationType.INFORMATION);
+        Notifications.Bus.notify(notification, project);
+    }
+
     private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
         return resDir != null && VfsUtilCore.isAncestor(resDir, file, true);
@@ -282,7 +344,6 @@ public class CommitAllAction extends AnAction {
         BapFileStatusService statusService = BapFileStatusService.getInstance(project);
         List<VirtualFile> result = new ArrayList<>();
         Map<String, BapFileStatus> allStatuses = statusService.getAllStatuses();
-
         for (Map.Entry<String, BapFileStatus> entry : allStatuses.entrySet()) {
             String path = entry.getKey();
             BapFileStatus status = entry.getValue();
@@ -304,7 +365,6 @@ public class CommitAllAction extends AnAction {
             if (status == BapFileStatus.MODIFIED) symbol = "[M]";
             if (status == BapFileStatus.ADDED)    symbol = "[A]";
             if (status == BapFileStatus.DELETED_LOCALLY) symbol = "[D]";
-
             sb.append(symbol).append(" ").append(f.getName()).append("\n");
             if (++count > 15) {
                 sb.append("... 等 ").append(files.size()).append(" 个文件");
@@ -344,35 +404,6 @@ public class CommitAllAction extends AnAction {
             }
             return null;
         });
-    }
-
-    private VirtualFile findModuleRoot(VirtualFile current) {
-        VirtualFile dir = current.isDirectory() ? current : current.getParent();
-        while (dir != null) {
-            VirtualFile configFile = dir.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-            if (configFile != null && configFile.exists()) return dir;
-            dir = dir.getParent();
-        }
-        return null;
-    }
-
-    private String extractAttr(String xml, String attr) {
-        Pattern p = Pattern.compile(attr + "=\"([^\"]*)\"");
-        Matcher m = p.matcher(xml);
-        return m.find() ? m.group(1) : null;
-    }
-
-    private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Commit Error"));
-    }
-
-    private void showInfo(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, "Commit All"));
-    }
-
-    private void sendNotification(Project project, String title, String content, NotificationType type) {
-        Notification notification = new Notification("Cloud Project Download", title, content, type);
-        Notifications.Bus.notify(notification, project);
     }
 
     @Override
