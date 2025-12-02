@@ -3,13 +3,11 @@ package com.bap.dev.action;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import bap.java.CJavaFolderDto;
-import bap.md.java.CJavaProject;
-import bap.md.java.CResFileDo;
+import bap.java.CommitPackage;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
-import com.cdao.impl.entity.field.GID;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -39,7 +37,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,244 +46,243 @@ public class CommitJavaCodeAction extends AnAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-
-        // --- 🔴 核心修改：获取多选文件数组 ---
         VirtualFile[] selectedFiles = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
 
         if (project == null || selectedFiles == null || selectedFiles.length == 0) return;
 
         FileDocumentManager.getInstance().saveAllDocuments();
 
-        // 启动后台任务 (改为批量处理)
+        VirtualFile moduleRoot = findModuleRoot(selectedFiles[0]);
+        if (moduleRoot == null) {
+            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            return;
+        }
+
+        String comments = Messages.showInputDialog(project,
+                "请输入提交注释 (Comments):",
+                "Commit Code",
+                Messages.getQuestionIcon(),
+                "", null);
+
+        if (comments == null) return;
+
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing Files...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                indicator.setIndeterminate(false);
-                int total = selectedFiles.length;
-
-                for (int i = 0; i < total; i++) {
-                    VirtualFile file = selectedFiles[i];
-                    if (indicator.isCanceled()) break;
-
-                    indicator.setFraction((double) (i + 1) / total);
-                    indicator.setText("Committing " + file.getName() + " (" + (i + 1) + "/" + total + ")...");
-
-                    if (file.isDirectory()) continue; // 跳过文件夹
-
-                    VirtualFile moduleRoot = findModuleRoot(file);
-                    if (moduleRoot == null) continue; // 找不到配置就跳过
-
-                    try {
-                        if (isResourceFile(moduleRoot, file)) {
-                            commitResourceFile(project, moduleRoot, file);
-                        } else {
-                            commitJavaFile(project, moduleRoot, file);
-                        }
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                        // 可以选择收集错误最后统一报，或者直接弹窗（不推荐在循环中弹窗）
-                        System.err.println("Failed to commit " + file.getName() + ": " + ex.getMessage());
-                    }
+                indicator.setIndeterminate(true);
+                try {
+                    commitWithPackage(project, moduleRoot, selectedFiles, comments);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    showError("提交失败: " + ex.getMessage());
                 }
-
-                // 刷新 UI
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
-                });
             }
         });
     }
 
-    // --- 资源文件提交逻辑 (修复版) ---
-// --- 资源文件提交逻辑 (修复版) ---
-    private void commitResourceFile(Project project, VirtualFile moduleRoot, VirtualFile file) throws Exception {
-        String relativePath = getResourceRelativePath(moduleRoot, file);
-        if (relativePath == null) throw new Exception("无法计算资源路径");
-
-        // 获取文件状态
-        BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
-
+    private void commitWithPackage(Project project, VirtualFile moduleRoot, VirtualFile[] files, String comments) throws Exception {
         BapRpcClient client = prepareClient(moduleRoot);
         String projectUuid = getProjectUuid(moduleRoot);
 
         try {
-            // === 🔴 修复点 1: 红 D (Deleted) 处理 ===
-            if (status == BapFileStatus.DELETED_LOCALLY) {
-                // 1. 查询 ID
-                CResFileDto existingDto = client.getService().getResFile(projectUuid, relativePath, false);
-                if (existingDto != null) {
-                    // 2. 删除云端
-                    client.getService().deleteResFile(new GID("bap.md.java.CResFileDo", existingDto.getUuid()));
-                }
-                // 3. 删除本地占位符并刷新状态
-                deleteLocalPlaceholder(project, file);
-                return; // 🚨 必须 return，不再执行上传逻辑
-            }
-            // --------------------------------------------
-
-
-            // 1. 获取 res 文件夹
             List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
-            CJavaFolderDto resFolder = folders.stream()
-                    .filter(item -> "res".equals(item.getName()))
-                    .findFirst()
-                    .orElse(null);
-            if (resFolder == null) throw new Exception("云端 res 文件夹不存在");
 
-            // 2. 先删旧的
-            CResFileDto existingDto = client.getService().getResFile(projectUuid, relativePath, false);
-            if (existingDto != null) {
-                client.getService().deleteResFile(new GID("bap.md.java.CResFileDo", existingDto.getUuid()));
+            CommitPackage pkg = new CommitPackage();
+            pkg.setComments(comments);
+
+            Map<String, List<CJavaCode>> mapFolder2Codes = new HashMap<>();
+            Map<String, Set<String>> deleteCodeMap = new HashMap<>();
+            Map<String, List<CResFileDto>> mapFolder2Files = new HashMap<>();
+            Map<String, Set<String>> deleteFileMap = new HashMap<>();
+
+            for (VirtualFile file : files) {
+                VirtualFile currentRoot = findModuleRoot(file);
+                if (currentRoot == null || !currentRoot.equals(moduleRoot)) continue;
+
+                if (isResourceFile(currentRoot, file)) {
+                    prepareResource(project, client, projectUuid, currentRoot, file, folders, mapFolder2Files, deleteFileMap);
+                } else {
+                    prepareJava(project, client, projectUuid, currentRoot, file, folders, mapFolder2Codes, deleteCodeMap);
+                }
             }
 
-            // 3. 上传新的
-            byte[] content = file.contentsToByteArray();
-            CResFileDto uploadDto = new CResFileDto();
-            String fileName = file.getName();
-            String filePackage = "";
-            int lastSlash = relativePath.lastIndexOf('/');
-            if (lastSlash >= 0) {
-                filePackage = relativePath.substring(0, lastSlash).replace('/', '.');
-            }
+            pkg.setMapFolder2Codes(mapFolder2Codes);
+            pkg.setDeleteCodeMap(deleteCodeMap);
+            pkg.setMapFolder2Files(mapFolder2Files);
+            pkg.setDeleteFileMap(deleteFileMap);
 
-            uploadDto.setFileName(fileName);
-            uploadDto.setFilePackage(filePackage);
-            uploadDto.setOwner(resFolder.getUuid());
-            uploadDto.setFileBin(content);
-            uploadDto.setSize((long) content.length);
+            client.getService().commitCode(projectUuid, pkg);
 
-            client.getService().importResFile(new GID("bap.md.java.CJavaProject", projectUuid), uploadDto);
-
-            onSuccess(project, file);
+            onSuccess(project, files);
 
         } finally {
             client.shutdown();
         }
     }
 
-    // --- Java 文件处理 (保持不变) ---
-    private void commitJavaFile(Project project, VirtualFile moduleRoot, VirtualFile file) throws Exception {
-        String fullClassName = resolveClassName(project, file);
-        if (fullClassName == null) throw new Exception("无法解析类名");
+    // --- 资源文件准备 ---
+    private void prepareResource(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
+                                 List<CJavaFolderDto> folders,
+                                 Map<String, List<CResFileDto>> updateMap,
+                                 Map<String, Set<String>> deleteMap) throws Exception {
 
         BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
-        BapRpcClient client = prepareClient(moduleRoot);
-        String projectUuid = getProjectUuid(moduleRoot);
+        String relativePath = getResourceRelativePath(moduleRoot, file); // pt/index.html
+        if (relativePath == null) return;
 
-        try {
+        String folderName = "res";
 
-            // === 🔴 修复点 2: 红 D (Deleted) 处理 ===
-            if (status == BapFileStatus.DELETED_LOCALLY) {
-                // 1. 删除云端
-                client.getService().deleteCode(projectUuid, fullClassName, true);
-                // 2. 删除本地占位符
-                deleteLocalPlaceholder(project, file);
-                return; // 🚨 必须 return
-            }
+        // 1. 删除逻辑
+        if (status == BapFileStatus.DELETED_LOCALLY) {
+            deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(relativePath);
 
-            Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
-            CJavaCode cJavaCode;
-
-            if (remoteObj != null) {
-                // 修改 (M)
-                if (remoteObj instanceof CJavaCode) {
-                    cJavaCode = (CJavaCode) remoteObj;
-                } else {
-                    cJavaCode = new CJavaCode();
-                    try {
-                        java.lang.reflect.Field fUuid = remoteObj.getClass().getField("uuid");
-                        cJavaCode.setUuid((String) fUuid.get(remoteObj));
-                    } catch (Exception ignore) {}
-                }
-            } else {
-                // 新增 (A)
-                cJavaCode = new CJavaCode();
-
-                // --- 🔴 核心修复：设置 Project UUID ---
-                // 假设 CJavaCode 的字段是 public 的，如果不是请用 setProjectUuid(projectUuid)
-                cJavaCode.setProjectUuid(projectUuid);
-                cJavaCode.setUuid(CmnUtil.allocUUIDWithUnderline());
-                // -------------------------------------
-
-                cJavaCode.setMainClass(file.getNameWithoutExtension());
-                int lastDot = fullClassName.lastIndexOf('.');
-                cJavaCode.setJavaPackage((lastDot > 0) ? fullClassName.substring(0, lastDot) : "");
-
-                // --- 🔴 修复：计算并设置 Owner ---
-                String ownerUuid = getOwnerFolderUuid(client, projectUuid, moduleRoot, file);
-                if (ownerUuid == null) {
-                    throw new Exception("无法确定代码所属的源码目录(Owner)，请检查 src 下的目录结构");
-                }
-                cJavaCode.setOwner(ownerUuid);
-                // ------------------------------
-            }
-
-            String content = new String(file.contentsToByteArray(), StandardCharsets.UTF_8);
-            cJavaCode.setCode(content);
-
-            client.getService().saveJavaCode(cJavaCode, true);
-
-            onSuccess(project, file);
-
-        } finally {
-            client.shutdown();
+            // --- 🔴 修复：标记该文件需要在 onSuccess 中被物理删除 ---
+            // 注意：我们在 CommitPackage 模式下，这里只负责收集数据到 deleteMap
+            // 物理删除本地文件的操作，应该放在 client.commitCode 成功之后统一做！
+            // 否则你现在删了，万一提交失败了咋办？
+            return;
         }
+
+        // 2. 新增/修改逻辑
+        // 注意：不再将 MODIFIED 加入 deleteMap，避免逻辑冲突
+
+        byte[] content = file.contentsToByteArray();
+        CResFileDto dto = new CResFileDto();
+        dto.setFilePackage(relativePath);
+        dto.setFileName(file.getName());
+
+        int lastSlash = relativePath.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            dto.setFilePackage(relativePath.substring(0, lastSlash).replace('/', '.'));
+        }
+
+        dto.setFileBin(content);
+        dto.setSize((long) content.length);
+
+        String ownerUuid = findFolderUuid(folders, folderName);
+        if (ownerUuid != null) dto.setOwner(ownerUuid);
+
+        // --- 🔴 关键：设置 UUID 以触发 Update ---
+        // 无论本地状态如何，都先查一下云端。如果云端有，就填入 UUID，服务端会执行 Update。
+        // 如果云端没有，UUID 为空，服务端会执行 Insert。
+        CResFileDto existing = client.getService().getResFile(projectUuid, relativePath, false);
+        if (existing != null) {
+            dto.setUuid(existing.getUuid());
+        }
+        // --------------------------------------
+
+        updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(dto);
     }
 
-    // --- 辅助方法：删除本地占位符并刷新状态 ---
-    private void deleteLocalPlaceholder(Project project, VirtualFile file) {
+    // --- Java 文件准备 ---
+    private void prepareJava(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
+                             List<CJavaFolderDto> folders,
+                             Map<String, List<CJavaCode>> updateMap,
+                             Map<String, Set<String>> deleteMap) throws Exception {
+
+        BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+        String fullClassName = resolveClassName(project, file);
+        if (fullClassName == null) return;
+
+        String folderName = getOwnerFolderName(moduleRoot, file);
+        if (folderName == null) return;
+
+        if (status == BapFileStatus.DELETED_LOCALLY) {
+            deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(fullClassName);
+            return;
+        }
+
+        CJavaCode code = new CJavaCode();
+        code.setProjectUuid(projectUuid);
+        code.setMainClass(file.getNameWithoutExtension());
+
+        int lastDot = fullClassName.lastIndexOf('.');
+        code.setJavaPackage((lastDot > 0) ? fullClassName.substring(0, lastDot) : "");
+
+        String content = new String(file.contentsToByteArray(), StandardCharsets.UTF_8);
+        code.setCode(content);
+
+        String ownerUuid = findFolderUuid(folders, folderName);
+        if (ownerUuid != null) code.setOwner(ownerUuid);
+
+        // 查找并复用 UUID
+        Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
+        if (remoteObj != null && remoteObj instanceof CJavaCode) {
+            code.setUuid(((CJavaCode) remoteObj).getUuid());
+        } else {
+            code.setUuid(CmnUtil.allocUUIDWithUnderline());
+        }
+
+        updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(code);
+    }
+
+    // ... 辅助方法 (保持不变，请复制之前的实现) ...
+    // onSuccess, getOwnerFolderName, findFolderUuid, prepareClient, getProjectUuid, isResourceFile, getResourceRelativePath, resolveClassName, findModuleRoot, extractAttr, showError, sendNotification, update, getActionUpdateThread 等
+
+    private void onSuccess(Project project, VirtualFile[] files) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                WriteAction.run(() -> {
-                    // 先改状态为 Normal，防止删除后某些监听器报错
+            List<VirtualFile> toDelete = new ArrayList<>();
+
+            for (VirtualFile file : files) {
+                // 1. 先获取当前状态
+                BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+
+                // 2. 如果是 DELETED_LOCALLY (红D)，加入待删除列表，暂时不改状态
+                if (status == BapFileStatus.DELETED_LOCALLY) {
+                    toDelete.add(file);
+                }
+                // 3. 只有非删除状态的文件，才立即重置为 NORMAL
+                else if (file.isValid()) {
                     BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
-                    file.delete(this);
-                });
-                sendNotification(project, "删除成功", "文件 " + file.getName() + " 已从云端删除。");
-            } catch (Exception ignore) {}
-        });
-    }
+                    file.refresh(false, false);
+                }
+            }
 
-    // --- 新增辅助方法：获取文件所属的第一级文件夹 UUID ---
-    private String getOwnerFolderUuid(BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file) throws Exception {
-        VirtualFile srcDir = moduleRoot.findChild("src");
-        if (srcDir == null) return null;
+            // 4. 统一处理物理删除
+            if (!toDelete.isEmpty()) {
+                try {
+                    WriteAction.run(() -> {
+                        for(VirtualFile f : toDelete) {
+                            // 为了状态服务的数据一致性，删除前置为 Normal (逻辑删除变为物理删除)
+                            BapFileStatusService.getInstance(project).setStatus(f, BapFileStatus.NORMAL);
 
-        // 获取相对 src 的路径，例如 "core/com/pkg/A.java"
-        String path = VfsUtilCore.getRelativePath(file, srcDir);
-        if (path == null) return null;
+                            // 执行物理删除
+                            if(f.isValid()) {
+                                try {
+                                    f.delete(this);
+                                } catch (java.io.IOException e) {
+                                    e.printStackTrace();
+                                    // 可以在这里提示删除失败
+                                }
+                            }
+                        }
+                    });
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
 
-        int idx = path.indexOf('/');
-        if (idx <= 0) return null; // 文件直接在 src 下？这种情况可能不被支持
-
-        // 提取第一级目录名，例如 "core"
-        String folderName = path.substring(0, idx);
-
-        // 从云端获取文件夹列表并匹配
-        List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
-        return folders.stream()
-                .filter(f -> f.getName().equals(folderName))
-                .map(CJavaFolderDto::getUuid)
-                .findFirst()
-                .orElse(null);
-    }
-
-    // ... (onSuccess, prepareClient, getProjectUuid, isResourceFile, getResourceRelativePath, resolveClassName, findModuleRoot, extractAttr, showError, sendNotification, update, getActionUpdateThread 等方法完全保持不变，请直接复用原文件中的代码) ...
-
-    // 为了完整性，这里补充 onSuccess 方法
-    private void onSuccess(Project project, VirtualFile file) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
-            file.refresh(false, false);
             PsiManager.getInstance(project).dropPsiCaches();
             FileStatusManager.getInstance(project).fileStatusesChanged();
 
-            sendNotification(project, "提交成功", "文件 " + file.getName() + " 已同步至云端。");
+            sendNotification(project, "提交成功", "已提交 " + files.length + " 个文件。");
             project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
         });
     }
 
-    // 下面的辅助方法请确保在你的文件中存在 (与之前版本一致)
+    private String getOwnerFolderName(VirtualFile moduleRoot, VirtualFile file) {
+        VirtualFile srcDir = moduleRoot.findChild("src");
+        if (srcDir == null) return null;
+        String path = VfsUtilCore.getRelativePath(file, srcDir);
+        if (path == null) return null;
+        int idx = path.indexOf('/');
+        return (idx > 0) ? path.substring(0, idx) : path;
+    }
+
+    private String findFolderUuid(List<CJavaFolderDto> folders, String name) {
+        return folders.stream().filter(f -> f.getName().equals(name)).map(CJavaFolderDto::getUuid).findFirst().orElse(null);
+    }
+
     private BapRpcClient prepareClient(VirtualFile moduleRoot) throws Exception {
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
         String content = Files.readString(confFile.toPath());
@@ -310,9 +307,7 @@ public class CommitJavaCodeAction extends AnAction {
 
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        if (resDir == null) return null;
-        // 返回的路径不以 / 开头，例如 "pt/index.html"
-        return VfsUtilCore.getRelativePath(file, resDir);
+        return resDir != null ? VfsUtilCore.getRelativePath(file, resDir) : null;
     }
 
     private String resolveClassName(Project project, VirtualFile file) {
@@ -374,8 +369,8 @@ public class CommitJavaCodeAction extends AnAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
-        e.getPresentation().setEnabledAndVisible(file != null && !file.isDirectory());
+        VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
+        e.getPresentation().setEnabledAndVisible(files != null && files.length > 0);
     }
 
     @Override
