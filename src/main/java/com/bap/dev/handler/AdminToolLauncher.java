@@ -81,7 +81,16 @@ public class AdminToolLauncher {
             if (path == null) path = ""; // 防止 null
 
             // 按顺序添加 5 个参数
-            params.getProgramParametersList().add(host);                // args[0]
+            // 原代码
+            // params.getProgramParametersList().add(host); // args[0]
+
+            // ✅ 修改后的代码：参考 DevConf 的逻辑
+            if ("wss".equalsIgnoreCase(uriObj.getScheme())) {
+                // 如果是 wss，将协议头拼接到 host 参数中
+                params.getProgramParametersList().add("wss://" + host);
+            } else {
+                params.getProgramParametersList().add(host);
+            }
             params.getProgramParametersList().add(String.valueOf(port));// args[1]
             params.getProgramParametersList().add(path);                // args[2]
             params.getProgramParametersList().add(user);                // args[3]
