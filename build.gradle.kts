@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.1.1"
+version = "1.1.2"
 
 repositories {
     mavenCentral()
@@ -36,7 +36,7 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
 //            sinceBuild = "251"
-// 1. 兼容下限保持 223，确保 2022.3 版本能安装
+            // 1. 兼容下限保持 223，确保 2022.3 版本能安装
             sinceBuild = "223"
 
             // 2. 关键修改：设置一个兼容上限，包含您的 251.x 版本
