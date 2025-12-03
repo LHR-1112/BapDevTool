@@ -102,6 +102,7 @@ public class BapSettingsConfigurable implements Configurable {
         List<String> uris = settings.loginHistory.stream()
                 .map(p -> p.uri)
                 .collect(Collectors.toList());
+
         uriListModel.addAll(0, uris);
     }
 
