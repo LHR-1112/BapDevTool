@@ -42,3 +42,6 @@ bin/
 .DS_Store
 # 项目排除路径
 /.intellijPlatform/
+
+# 忽略本地测试文件 (新增)
+src/main/java/com/bap/dev/test1.java
