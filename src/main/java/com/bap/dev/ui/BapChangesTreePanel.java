@@ -5,6 +5,7 @@ import com.bap.dev.handler.ProjectRefresher;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
@@ -33,9 +34,11 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.*;
+import java.util.List;
 
 public class BapChangesTreePanel extends SimpleToolWindowPanel implements Disposable {
 
@@ -325,9 +328,16 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 else if (userObject instanceof CategoryWrapper) {
                     CategoryWrapper wrapper = (CategoryWrapper) userObject;
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
-                    if (wrapper.status == BapFileStatus.MODIFIED) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.YELLOW);
-                    else if (wrapper.status == BapFileStatus.ADDED) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.BLUE);
-                    else if (wrapper.status == BapFileStatus.DELETED_LOCALLY) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.RED);
+                    // 从配置获取颜色
+                    BapSettingsState settings = BapSettingsState.getInstance();
+
+                    if (wrapper.status == BapFileStatus.MODIFIED)
+                        attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getModifiedColorObj());
+                    else if (wrapper.status == BapFileStatus.ADDED)
+                        attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getAddedColorObj());
+                    else if (wrapper.status == BapFileStatus.DELETED_LOCALLY)
+                        attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getDeletedColorObj());
+
                     append(wrapper.title, attr);
                     setIcon(AllIcons.Nodes.Folder);
                 }
@@ -335,13 +345,20 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     VirtualFileWrapper wrapper = (VirtualFileWrapper) userObject;
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
                     String suffix = "";
+                    // 从配置获取颜色
+                    BapSettingsState settings = BapSettingsState.getInstance();
+                    Color modColor = settings.getModifiedColorObj();
+                    Color addColor = settings.getAddedColorObj();
+                    Color delColor = settings.getDeletedColorObj();
+
                     switch (wrapper.status) {
-                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.YELLOW); suffix = " [M]"; break;
-                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.BLUE); suffix = " [A]"; break;
-                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.RED); suffix = " [D]"; break;
+                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = " [M]"; break;
+                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = " [A]"; break;
+                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = " [D]"; break;
                     }
                     append(wrapper.file.getName(), attr);
                     append(suffix, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+
                     if (wrapper.file.isDirectory()) setIcon(AllIcons.Nodes.Folder);
                     else if ("java".equalsIgnoreCase(wrapper.file.getExtension())) setIcon(AllIcons.FileTypes.Java);
                     else setIcon(AllIcons.FileTypes.Text);

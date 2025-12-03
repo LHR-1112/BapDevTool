@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.2"
+version = "1.2.1"
 
 repositories {
     mavenCentral()
@@ -70,15 +70,15 @@ intellijPlatform {
                 <li><b>颜色冲突</b>：可能与 Git 文件状态颜色冲突。</li>
             </ul>
             <br>
-            
-            <h2>📧 联系方式</h2>
-            <ul>
-                <li><b>邮箱</b>: 2991747768@qq.com</li>
-            </ul>
         """.trimIndent()
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.2.1</h3>
+            <ul>
+                <li><b>新特性</b>：设置中可更改文件状态的颜色</li>
+            </ul>
+            
             <h3>v1.2</h3>
             <ul>
                 <li><b>bug修复</b>：去除没用到的依赖jar</li>
@@ -88,6 +88,7 @@ intellijPlatform {
                 <li><b>新特性</b>：整合commit时的文件列表提示与comment填写</li>
                 <li><b>新特性</b>：工程重定向的历史记录</li>
                 <li><b>新特性</b>：插件版本更新提醒</li>
+                <li><b>新特性</b>：新增文件状态颜色的修改</li>
             </ul>
             
             <h3>v1.1.2</h3>

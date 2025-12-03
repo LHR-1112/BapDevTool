@@ -2,13 +2,15 @@ package com.bap.dev.ui;
 
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState; // 引入配置
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ProjectViewNodeDecorator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.SimpleTextAttributes;
+
+import java.awt.Color;
 
 public class BapProjectDecorator implements ProjectViewNodeDecorator {
 
@@ -27,17 +29,23 @@ public class BapProjectDecorator implements ProjectViewNodeDecorator {
         SimpleTextAttributes attr;
         String suffix;
 
+        // --- 🔴 从配置中获取颜色 ---
+        BapSettingsState settings = BapSettingsState.getInstance();
+        Color modColor = settings.getModifiedColorObj();
+        Color addColor = settings.getAddedColorObj();
+        Color delColor = settings.getDeletedColorObj();
+
         switch (status) {
-            case MODIFIED: // 黄色 M
-                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.YELLOW);
+            case MODIFIED:
+                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor);
                 suffix = "M";
                 break;
-            case ADDED:    // 蓝色 A
-                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.BLUE);
+            case ADDED:
+                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor);
                 suffix = "A";
                 break;
-            case DELETED_LOCALLY: // 红色 D
-                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.RED);
+            case DELETED_LOCALLY:
+                attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor);
                 suffix = "D";
                 break;
             default:
