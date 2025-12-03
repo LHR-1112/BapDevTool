@@ -86,6 +86,7 @@ intellijPlatform {
                 <li><b>bug修复</b>：修复管理工具无法连接"wss://"类型的地址</li>
                 <li><b>新特性</b>：UpdateAll</li>
                 <li><b>新特性</b>：整合commit时的文件列表提示与comment填写</li>
+                <li><b>新特性</b>：工程重定向的历史记录</li>
             </ul>
             
             <h3>v1.1.2</h3>
