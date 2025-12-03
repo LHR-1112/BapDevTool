@@ -59,7 +59,7 @@ public class ProjectDownloadAction extends AnAction {
 
         // 1. 获取历史配置
         PropertiesComponent props = PropertiesComponent.getInstance();
-        String defaultUri = props.getValue(PREF_URI, "ws://183.6.70.7:24620");
+        String defaultUri = props.getValue(PREF_URI, "ws://127.0.0.1:2020");
         String defaultUser = props.getValue(PREF_USER, "root");
 
         // 2. 弹出登录框 (Step 1)

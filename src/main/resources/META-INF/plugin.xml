@@ -32,6 +32,12 @@
                     icon="AllIcons.Toolwindows.ToolWindowChanges"
                     anchor="left"
                     factoryClass="com.bap.dev.ui.BapToolWindowFactory"/>
+
+        <postStartupActivity implementation="com.bap.dev.activity.CheckUpdateActivity"/>
+
+        <notificationGroup id="Bap Update Notification"
+                           displayType="BALLOON"
+                           key="bap.update.notification"/>
     </extensions>
 
     <projectListeners>
