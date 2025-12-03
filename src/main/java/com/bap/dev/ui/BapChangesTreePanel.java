@@ -61,6 +61,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateJavaCodeAction"));
         group.addSeparator();
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
+        // --- 🔴 新增：工具栏添加 Update All ---
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
+        // -----------------------------------
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.PublishProjectAction"));
 
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BapChangesToolbar", group, true);
@@ -69,7 +72,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
         setContent(new JBScrollPane(tree));
 
-        // --- 🔴 核心修复：使用 Lambda 表达式订阅消息，避免方法引用报错 ---
+        // 绑定生命周期
         project.getMessageBus().connect(this).subscribe(BapChangesNotifier.TOPIC, new BapChangesNotifier() {
             @Override
             public void onChangesUpdated() {
@@ -102,7 +105,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
                 if (SwingUtilities.isRightMouseButton(e)) {
                     int row = tree.getClosestRowForLocation(e.getX(), e.getY());
-                    // 右键时如果不在选中项上，则选中当前行
                     if (!tree.isRowSelected(row)) {
                         tree.setSelectionRow(row);
                     }
@@ -123,59 +125,62 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         // 资源释放
     }
 
+    private void showContextMenu(DefaultMutableTreeNode node, MouseEvent e) {
+        Object userObject = node.getUserObject();
+        DefaultActionGroup group = new DefaultActionGroup();
+        if (userObject instanceof ModuleWrapper) {
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.RefreshProjectAction"));
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
+            // --- 🔴 新增：右键菜单添加 Update All ---
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
+            // ------------------------------------
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.PublishProjectAction"));
+        } else if (userObject instanceof VirtualFileWrapper) {
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitJavaCodeAction"));
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateJavaCodeAction"));
+            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction"));
+        }
+        if (group.getChildrenCount() > 0) {
+            ActionPopupMenu popupMenu = ActionManager.getInstance().createActionPopupMenu("BapChangesPopup", group);
+            popupMenu.getComponent().show(e.getComponent(), e.getX(), e.getY());
+        }
+    }
+
+    // ... (其他方法保持不变：rebuildTree, findAllBapModules, getData, ToolbarRefreshAction, getModuleRootFromNode, findModuleRoot, addStatusCategory, 渲染器, 内部类) ...
+    // 请直接复制之前完整的实现，这里为了节省篇幅省略重复代码
+
     private void rebuildTree() {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
-
             DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
             root.removeAllChildren();
-
-            // 1. 获取所有 Bap 模块
             List<ModuleWrapper> bapModules = findAllBapModules();
             bapModules.sort(Comparator.comparing(m -> m.name));
-
-            // 2. 获取当前所有变动文件的状态
             Map<String, BapFileStatus> statuses = BapFileStatusService.getInstance(project).getAllStatuses();
-
-            // 3. 遍历每个模块，构建节点
             for (ModuleWrapper moduleWrapper : bapModules) {
                 DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(moduleWrapper);
                 root.add(moduleNode);
-
-                // 筛选属于该模块的变动文件
                 Map<BapFileStatus, List<VirtualFile>> moduleChanges = new HashMap<>();
-
                 if (!statuses.isEmpty()) {
                     for (Map.Entry<String, BapFileStatus> entry : statuses.entrySet()) {
                         String path = entry.getKey();
                         BapFileStatus status = entry.getValue();
                         if (status == BapFileStatus.NORMAL) continue;
-
-                        // 检查文件是否属于当前模块 (简单前缀匹配)
                         if (path.startsWith(moduleWrapper.rootFile.getPath())) {
                             VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-                            if (file != null && file.isValid()) { // 增加 isValid 检查
+                            if (file != null && file.isValid()) {
                                 moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(file);
-                            } else if (status == BapFileStatus.DELETED_LOCALLY) {
-                                // 对于已删除文件，findFileByPath 可能返回 null
-                                // 我们需要一个虚拟对象或者保留之前的 VirtualFile 引用
-                                // 这里暂时跳过，因为如果文件真的删了，VirtualFile 也没了
-                                // 如果是红D占位符，文件应该还在
                             }
                         }
                     }
                 }
-
                 if (!moduleChanges.isEmpty()) {
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, "Modified");
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, "Added");
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, "Deleted");
                 }
             }
-
             treeModel.reload();
-
-            // 展开有内容的节点
             for (int i = 0; i < tree.getRowCount(); i++) {
                 TreePath path = tree.getPathForRow(i);
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
@@ -189,7 +194,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     private List<ModuleWrapper> findAllBapModules() {
         List<ModuleWrapper> result = new ArrayList<>();
         if (project.isDisposed()) return result;
-
         Module[] modules = ModuleManager.getInstance(project).getModules();
         for (Module module : modules) {
             VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
@@ -202,9 +206,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         }
         return result;
     }
-
-    // ... (getData, ToolbarRefreshAction, getModuleRootFromNode, showContextMenu, findModuleRoot, addStatusCategory, 渲染器, 内部类) ...
-    // 保持不变，请复用
 
     @Override
     public @Nullable Object getData(@NotNull String dataId) {
@@ -250,7 +251,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 VirtualFile moduleRoot = getModuleRootFromNode(node);
                 if (moduleRoot != null) modulesToRefresh.add(moduleRoot);
             }
-
             if (modulesToRefresh.isEmpty()) {
                 DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
                 for (int i = 0; i < root.getChildCount(); i++) {
@@ -263,20 +263,11 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     }
                 }
             }
-
             if (modulesToRefresh.isEmpty()) {
-                // 尝试重新扫描整个项目寻找模块，防止第一次打开为空
                 List<ModuleWrapper> allBapModules = findAllBapModules();
-                for (ModuleWrapper m : allBapModules) {
-                    modulesToRefresh.add(m.rootFile);
-                }
-                // 如果此时列表还是空，说明没有Bap项目，rebuildTree一下清空视图
-                if (modulesToRefresh.isEmpty()) {
-                    rebuildTree();
-                    return;
-                }
+                for (ModuleWrapper m : allBapModules) modulesToRefresh.add(m.rootFile);
+                if (modulesToRefresh.isEmpty()) { rebuildTree(); return; }
             }
-
             ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
@@ -299,24 +290,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         }
         else if (userObject instanceof VirtualFileWrapper) return findModuleRoot(((VirtualFileWrapper) userObject).file);
         return null;
-    }
-
-    private void showContextMenu(DefaultMutableTreeNode node, MouseEvent e) {
-        Object userObject = node.getUserObject();
-        DefaultActionGroup group = new DefaultActionGroup();
-        if (userObject instanceof ModuleWrapper) {
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.RefreshProjectAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.PublishProjectAction"));
-        } else if (userObject instanceof VirtualFileWrapper) {
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitJavaCodeAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateJavaCodeAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction"));
-        }
-        if (group.getChildrenCount() > 0) {
-            ActionPopupMenu popupMenu = ActionManager.getInstance().createActionPopupMenu("BapChangesPopup", group);
-            popupMenu.getComponent().show(e.getComponent(), e.getX(), e.getY());
-        }
     }
 
     private VirtualFile findModuleRoot(VirtualFile file) {
