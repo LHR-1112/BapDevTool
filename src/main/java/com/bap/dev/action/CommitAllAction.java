@@ -19,11 +19,11 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -32,14 +32,20 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiManager;
+import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextArea;
 import com.kwaidoo.ms.tool.CmnUtil;
 import cplugin.ms.dto.CResFileDto;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -76,11 +82,12 @@ public class CommitAllAction extends AnAction {
                     }
 
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        if (showConfirmDialog(project, changedFiles)) {
-                            String comments = Messages.showInputDialog(project, "请输入提交注释:", "Commit All", Messages.getQuestionIcon());
-                            if (comments != null) {
-                                startBatchCommit(project, moduleRoot, changedFiles, comments);
-                            }
+                        // 使用自定义的合并弹窗
+                        CommitDialog dialog = new CommitDialog(project, changedFiles);
+                        if (dialog.showAndGet()) {
+                            // 用户点击 OK，获取注释并开始提交
+                            String comments = dialog.getComment();
+                            startBatchCommit(project, moduleRoot, changedFiles, comments);
                         }
                     });
 
@@ -148,7 +155,7 @@ public class CommitAllAction extends AnAction {
         });
     }
 
-    // --- 资源文件准备 (修复版) ---
+    // --- 资源文件准备 ---
     private void prepareResource(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
                                  List<CJavaFolderDto> folders,
                                  Map<String, List<CResFileDto>> updateMap,
@@ -165,8 +172,6 @@ public class CommitAllAction extends AnAction {
             deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(relativePath);
             return;
         }
-
-        // ❌ 移除旧逻辑：if (status == MODIFIED) { deleteMap.add(...) }
 
         // 新增/修改逻辑
         byte[] content = file.contentsToByteArray();
@@ -185,18 +190,16 @@ public class CommitAllAction extends AnAction {
         String ownerUuid = findFolderUuid(folders, folderName);
         if (ownerUuid != null) dto.setOwner(ownerUuid);
 
-        // --- 🔴 关键：查询并复用 UUID ---
+        // 查询并复用 UUID
         CResFileDto existing = client.getService().getResFile(projectUuid, relativePath, false);
         if (existing != null) {
             dto.setUuid(existing.getUuid());
         }
-        // ------------------------------
 
         updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(dto);
     }
 
-    // ... prepareJava, onSuccess, collectChangedFiles 等辅助方法保持不变 ...
-    // 请复制之前的实现
+    // --- Java文件准备 ---
     private void prepareJava(Project project, BapRpcClient client, String projectUuid, VirtualFile moduleRoot, VirtualFile file,
                              List<CJavaFolderDto> folders,
                              Map<String, List<CJavaCode>> updateMap,
@@ -256,29 +259,21 @@ public class CommitAllAction extends AnAction {
             List<VirtualFile> toDelete = new ArrayList<>();
 
             for (VirtualFile file : files) {
-                // 1. 必须先获取当前状态，再做处理
                 BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
 
-                // 2. 如果是 DELETED_LOCALLY (红D)，加入待删除列表，暂时不重置状态
                 if (status == BapFileStatus.DELETED_LOCALLY) {
                     toDelete.add(file);
-                }
-                // 3. 如果是普通修改或新增 (M/A)，且文件有效，则立即重置为 NORMAL
-                else if (file.isValid()) {
+                } else if (file.isValid()) {
                     BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
                     file.refresh(false, false);
                 }
             }
 
-            // 4. 统一处理物理删除
             if (!toDelete.isEmpty()) {
                 try {
                     WriteAction.run(() -> {
                         for(VirtualFile f : toDelete) {
-                            // 为了数据一致性，删除前将内部状态置为 Normal
                             BapFileStatusService.getInstance(project).setStatus(f, BapFileStatus.NORMAL);
-
-                            // 执行物理删除
                             if(f.isValid()) {
                                 try {
                                     f.delete(this);
@@ -356,24 +351,6 @@ public class CommitAllAction extends AnAction {
         return result;
     }
 
-    private boolean showConfirmDialog(Project project, List<VirtualFile> files) {
-        StringBuilder sb = new StringBuilder("以下文件将被提交到云端:\n\n");
-        int count = 0;
-        for (VirtualFile f : files) {
-            BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(f);
-            String symbol = "[?]";
-            if (status == BapFileStatus.MODIFIED) symbol = "[M]";
-            if (status == BapFileStatus.ADDED)    symbol = "[A]";
-            if (status == BapFileStatus.DELETED_LOCALLY) symbol = "[D]";
-            sb.append(symbol).append(" ").append(f.getName()).append("\n");
-            if (++count > 15) {
-                sb.append("... 等 ").append(files.size()).append(" 个文件");
-                break;
-            }
-        }
-        return Messages.showOkCancelDialog(project, sb.toString(), "Confirm Commit All", "Commit", "Cancel", Messages.getQuestionIcon()) == Messages.OK;
-    }
-
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
             if (file.getLength() > 0) {
@@ -415,5 +392,80 @@ public class CommitAllAction extends AnAction {
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
         return ActionUpdateThread.BGT;
+    }
+
+    /**
+     * 自定义合并提交弹窗：包含文件列表预览和注释输入
+     */
+    private static class CommitDialog extends DialogWrapper {
+        private final List<VirtualFile> files;
+        private final Project project;
+        private JBTextArea commentArea;
+
+        protected CommitDialog(Project project, List<VirtualFile> files) {
+            super(project);
+            this.project = project;
+            this.files = files;
+            setTitle("Commit Files");
+            setOKButtonText("Commit");
+            init();
+        }
+
+        @Override
+        protected @Nullable JComponent createCenterPanel() {
+            JPanel dialogPanel = new JPanel(new BorderLayout(0, 10));
+            dialogPanel.setPreferredSize(new Dimension(600, 450));
+
+            // 1. 上半部分：文件列表预览
+            String fileListText = buildFileListText();
+            JTextArea fileListArea = new JTextArea(fileListText);
+            fileListArea.setEditable(false);
+            fileListArea.setBackground(null); // 使用默认背景
+            // 简单美化字体
+            fileListArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+
+            JLabel fileLabel = new JLabel("Changes to commit (" + files.size() + " files):");
+            JPanel filePanel = new JPanel(new BorderLayout(0, 5));
+            filePanel.add(fileLabel, BorderLayout.NORTH);
+            filePanel.add(new JBScrollPane(fileListArea), BorderLayout.CENTER);
+
+            // 2. 下半部分：注释输入
+            JLabel commentLabel = new JLabel("Commit Message:");
+            commentArea = new JBTextArea(4, 50);
+            commentArea.setLineWrap(true);
+            commentArea.setWrapStyleWord(true);
+
+            JPanel commentPanel = new JPanel(new BorderLayout(0, 5));
+            commentPanel.add(commentLabel, BorderLayout.NORTH);
+            commentPanel.add(new JBScrollPane(commentArea), BorderLayout.CENTER);
+
+            // 布局组装
+            dialogPanel.add(filePanel, BorderLayout.CENTER);
+            dialogPanel.add(commentPanel, BorderLayout.SOUTH);
+
+            return dialogPanel;
+        }
+
+        @Override
+        public @Nullable JComponent getPreferredFocusedComponent() {
+            return commentArea; // 弹窗打开时焦点默认在注释框
+        }
+
+        public String getComment() {
+            return commentArea.getText().trim();
+        }
+
+        private String buildFileListText() {
+            StringBuilder sb = new StringBuilder();
+            for (VirtualFile f : files) {
+                BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(f);
+                String symbol = "[?]";
+                if (status == BapFileStatus.MODIFIED) symbol = "[M]";
+                if (status == BapFileStatus.ADDED)    symbol = "[A]";
+                if (status == BapFileStatus.DELETED_LOCALLY) symbol = "[D]";
+                sb.append(symbol).append(" ").append(f.getName()).append("\n");
+            }
+            return sb.toString();
+        }
     }
 }
