@@ -45,9 +45,59 @@ intellijPlatform {
             untilBuild = "999.*"
         }
 
+        // 1. Description: 包含简介、安装、环境、已知问题、联系方式
+        description = """
+            <p>基于原有 Eclipse 云开发插件重构的 <b>IntelliJ IDEA</b> 版本。</p>
+            <br>
+            
+            <h2>📥 安装指南</h2>
+            <p><b>注意</b>！您的 Idea 版本必须 >=IU-223.XXX 才能安装此插件。</p>
+            <ol>
+                <li><b>下载</b>最新的插件压缩包。</li>
+                <li>进入 <b>Settings</b> -> <b>Plugins</b>。</li>
+                <li>点击齿轮图标，选择 <b>Install Plugin from Disk...</b>。</li>
+                <li>选择压缩包安装并<b>重启</b> IDE。</li>
+            </ol>
+            <br>
+            
+            <h2>🔄 更新说明</h2>
+            <p>覆盖安装即可更新。</p>
+            <br>
+
+            <h2>⚠️ 已知问题</h2>
+            <ul>
+                <li><b>管理工具</b>：沿用原 Eclipse 逻辑。</li>
+                <li><b>颜色冲突</b>：可能与 Git 文件状态颜色冲突。</li>
+            </ul>
+            <br>
+            
+            <h2>📧 联系方式</h2>
+            <ul>
+                <li><b>邮箱</b>: 2991747768@qq.com</li>
+            </ul>
+        """.trimIndent()
+
+        // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
-      Initial version
-    """.trimIndent()
+            <h3>v1.1.2</h3>
+            <ul>
+                <li><b>新特性</b>：commit时的提交信息</li>
+                <li><b>bug修复</b>：解决无法记录提交历史记录的问题</li>
+            </ul>
+            
+            <h3>v1.1.1</h3>
+            <ul>
+                <li><b>bug修复</b>：支援至2022.3.2版本</li>
+                <li><b>bug修复</b>：解决管理工具无法显示的问题</li>
+            </ul>
+            
+            <h3>v1.1</h3>
+            <ul>
+                <li><b>新特性</b>：版本管理(历史查询、回滚、对比)</li>
+                <li><b>新特性</b>：自动刷新文件状态设置</li>
+                <li><b>bug修复</b>：修复发布自动编译失效问题</li>
+            </ul>
+        """.trimIndent()
     }
 }
 
