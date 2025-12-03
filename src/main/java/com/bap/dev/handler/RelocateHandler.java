@@ -3,8 +3,10 @@ package com.bap.dev.handler;
 import bap.java.CJavaConst;
 import bap.java.CJavaProjectDto;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.settings.BapSettingsState;
 import com.bap.dev.ui.LogonDialog;
 import com.bap.dev.ui.RelocateDialog;
+import com.bap.dev.ui.RelocateHistoryDialog;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -26,8 +28,10 @@ import java.util.regex.Pattern;
 public class RelocateHandler {
 
     public static void relocate(Project project, VirtualFile moduleRoot) {
-        // 1. 读取当前配置 (作为默认值)
-        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+        String modulePath = moduleRoot.getPath();
+        File confFile = new File(modulePath, CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+
+        // 1. 读取当前配置 (为了获取默认 AdminTool 和做对比)
         String oldContent = "";
         String defUri = "", defUser = "", defPwd = "", defAdminTool = "bap.client.BapMainFrame";
 
@@ -44,17 +48,52 @@ public class RelocateHandler {
             }
         }
 
+        final String finalAdminTool = defAdminTool; // 供后续使用
+
+        // --- 🔴 Step 0: 检查历史记录 ---
+        List<BapSettingsState.RelocateProfile> history = BapSettingsState.getInstance().getRelocateHistory(modulePath);
+        if (!history.isEmpty()) {
+            RelocateHistoryDialog historyDialog = new RelocateHistoryDialog(project, history);
+            if (historyDialog.showAndGet()) {
+                if (historyDialog.isNewConnectionRequested()) {
+                    // 用户点了 "New Connection"，继续下面的标准流程
+                } else {
+                    // 用户选了历史记录 -> 直接写入文件
+                    BapSettingsState.RelocateProfile profile = historyDialog.getSelectedProfile();
+                    if (profile != null) {
+                        try {
+                            // 优先使用历史里的 AdminTool，如果没有则使用文件原本的
+                            String toolToWrite = (profile.adminTool != null && !profile.adminTool.isEmpty()) ? profile.adminTool : finalAdminTool;
+
+                            saveNewConfig(confFile, profile.projectUuid, profile.uri, profile.user, profile.password, toolToWrite);
+
+                            // 更新一下历史记录的顺序（置顶）
+                            BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
+
+                            Messages.showInfoMessage("Successfully switched back to project:\n" + profile.projectName, "Relocated");
+                            return; // 结束，不走网络连接
+                        } catch (IOException e) {
+                            showError("Failed to write config: " + e.getMessage(), project);
+                            // 写入失败，可能想走新连接，继续往下流转
+                        }
+                    }
+                }
+            } else {
+                return; // 用户点击 Cancel
+            }
+        }
+        // -----------------------------
+
         // 2. 弹出登录框 (Step 1)
+        // 这里的 defUri 等如果上面历史记录没命中，还是用文件里的旧值
         LogonDialog logonDialog = new LogonDialog(project, defUri, defUser, defPwd);
         if (!logonDialog.showAndGet()) {
             return; // 用户取消
         }
 
-        // 获取用户输入的新凭证
         String newUri = logonDialog.getUri();
         String newUser = logonDialog.getUser();
         String newPwd = logonDialog.getPwd();
-        final String finalAdminTool = defAdminTool; // 保持 AdminTool 不变
 
         // 3. 后台连接并获取列表
         BapRpcClient client = new BapRpcClient();
@@ -84,6 +123,14 @@ public class RelocateHandler {
                                 // 5. 执行重定向 (保存全量新配置)
                                 try {
                                     saveNewConfig(confFile, selected.getUuid(), newUri, newUser, newPwd, finalAdminTool);
+
+                                    // --- 🔴 成功后保存到历史记录 ---
+                                    BapSettingsState.RelocateProfile profile = new BapSettingsState.RelocateProfile(
+                                            newUri, newUser, newPwd, selected.getUuid(), selected.getName(), finalAdminTool
+                                    );
+                                    BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
+                                    // ----------------------------
+
                                     Messages.showInfoMessage("Project relocated to: " + selected.getName() + "\nServer: " + newUri, "Success");
                                 } catch (Exception e) {
                                     showError("保存配置失败: " + e.getMessage(), project);
@@ -101,11 +148,7 @@ public class RelocateHandler {
         });
     }
 
-    /**
-     * 生成并保存新的配置文件 (全量覆盖)
-     */
     private static void saveNewConfig(File confFile, String pjUuid, String uri, String user, String pwd, String adminTool) throws IOException {
-        // 使用 String.format 重新生成标准的 XML 内容，确保所有字段都是最新的
         String xmlContent = String.format(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                         "\n" +

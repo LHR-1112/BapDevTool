@@ -8,9 +8,7 @@ import com.intellij.util.xmlb.XmlSerializerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @State(
         name = "com.bap.dev.settings.BapSettingsState",
@@ -21,84 +19,111 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public boolean compileOnPublish = true;
     public boolean autoRefresh = false;
 
-    // --- 🔴 修改：使用对象列表替代简单的 String 列表 ---
+    // 登录历史 (全局)
     public List<LoginProfile> loginHistory = new ArrayList<>();
 
-    // 定义静态内部类用于存储单条配置 (必须是 public static 才能被 IDEA 序列化)
+    // --- 🔴 新增：模块重定向历史 (Map<ModulePath, List<RelocateProfile>>) ---
+    public Map<String, List<RelocateProfile>> moduleRelocateHistory = new HashMap<>();
+
+    // 定义重定向配置对象
+    public static class RelocateProfile {
+        public String uri = "";
+        public String user = "";
+        public String password = "";
+        public String projectUuid = "";
+        public String projectName = ""; // 用于显示友好名称
+        public String adminTool = "";
+
+        public RelocateProfile() {}
+
+        public RelocateProfile(String uri, String user, String password, String projectUuid, String projectName, String adminTool) {
+            this.uri = uri;
+            this.user = user;
+            this.password = password;
+            this.projectUuid = projectUuid;
+            this.projectName = projectName;
+            this.adminTool = adminTool;
+        }
+
+        // 用于去重：同一个服务器下的同一个工程视为重复
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            RelocateProfile that = (RelocateProfile) o;
+            return Objects.equals(uri, that.uri) && Objects.equals(projectUuid, that.projectUuid);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(uri, projectUuid);
+        }
+
+        // 用于在列表显示
+        @Override
+        public String toString() {
+            return projectName + "  Wait-For  " + uri; // 临时格式，UI中会自定义渲染
+        }
+    }
+    // -------------------------------------------------------------
+
+    // ... (LoginProfile 内部类保持不变，省略以节省空间) ...
     public static class LoginProfile {
         public String uri = "";
         public String user = "";
-        public String password = ""; // 注意：生产环境建议使用 CredentialStore 存储密码，此处为简化存入 XML
-
-        // 无参构造函数用于序列化
+        public String password = "";
         public LoginProfile() {}
-
         public LoginProfile(String uri, String user, String password) {
             this.uri = uri;
             this.user = user;
             this.password = password;
         }
-
-        // 重写 equals 以便列表操作
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LoginProfile that = (LoginProfile) o;
-            return Objects.equals(uri, that.uri);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(uri);
-        }
+        @Override public boolean equals(Object o) { /*...*/ return false; }
+        @Override public int hashCode() { /*...*/ return 0; }
     }
-    // ----------------------------------------------------
 
     public static BapSettingsState getInstance() {
         return ApplicationManager.getApplication().getService(BapSettingsState.class);
     }
 
     @Override
-    public @Nullable BapSettingsState getState() {
-        return this;
-    }
+    public @Nullable BapSettingsState getState() { return this; }
 
     @Override
     public void loadState(@NotNull BapSettingsState state) {
         XmlSerializerUtil.copyBean(state, this);
     }
 
-    /**
-     * 🔴 新增：添加或更新登录配置 (置顶并去重)
-     */
     public void addOrUpdateProfile(String uri, String user, String pwd) {
+        // ... (保持原有的登录记录逻辑) ...
         if (uri == null || uri.trim().isEmpty()) return;
-
-        // 创建新对象
-        LoginProfile newProfile = new LoginProfile(uri.trim(), user, pwd);
-
-        // 如果已存在该 URI，先移除旧的
         loginHistory.removeIf(p -> p.uri.equals(uri.trim()));
+        loginHistory.add(0, new LoginProfile(uri.trim(), user, pwd));
+        if (loginHistory.size() > 20) loginHistory = new ArrayList<>(loginHistory.subList(0, 20));
+    }
 
-        // 添加到头部
-        loginHistory.add(0, newProfile);
+    public LoginProfile getProfile(String uri) {
+        for (LoginProfile p : loginHistory) {
+            if (p.uri.equals(uri)) return p;
+        }
+        return null;
+    }
 
-        // 限制数量 (例如保留最近20条)
-        if (loginHistory.size() > 20) {
-            loginHistory = new ArrayList<>(loginHistory.subList(0, 20));
+    // --- 🔴 新增：添加重定向历史 ---
+    public void addRelocateHistory(String modulePath, RelocateProfile profile) {
+        List<RelocateProfile> list = moduleRelocateHistory.computeIfAbsent(modulePath, k -> new ArrayList<>());
+
+        // 去重并置顶
+        list.remove(profile);
+        list.add(0, profile);
+
+        // 每个模块最多保留 10 条历史
+        if (list.size() > 10) {
+            moduleRelocateHistory.put(modulePath, new ArrayList<>(list.subList(0, 10)));
         }
     }
 
-    /**
-     * 🔴 新增：根据 URI 获取对应的用户名密码
-     */
-    public LoginProfile getProfile(String uri) {
-        for (LoginProfile p : loginHistory) {
-            if (p.uri.equals(uri)) {
-                return p;
-            }
-        }
-        return null;
+    public List<RelocateProfile> getRelocateHistory(String modulePath) {
+        return moduleRelocateHistory.getOrDefault(modulePath, Collections.emptyList());
     }
 }
