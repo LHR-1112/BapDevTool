@@ -83,6 +83,7 @@ intellijPlatform {
             <ul>
                 <li><b>bug修复</b>：去除没用到的依赖jar</li>
                 <li><b>bug修复</b>：重新编排右键菜单选项的顺序</li>
+                <li><b>bug修复</b>：修复管理工具无法连接"wss://"类型的地址</li>
                 <li><b>新特性</b>：UpdateAll</li>
                 <li><b>新特性</b>：整合commit时的文件列表提示与comment填写</li>
             </ul>
