@@ -8,6 +8,7 @@ import com.intellij.util.ui.FormBuilder;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import java.awt.event.ItemEvent;
 import java.util.List;
 
 public class LogonDialog extends DialogWrapper {
@@ -22,8 +23,14 @@ public class LogonDialog extends DialogWrapper {
 
         setupUriCombo(defaultUri);
 
-        userField.setText(defaultUser != null ? defaultUser : "");
-        pwdField.setText(defaultPwd != null ? defaultPwd : "");
+        // 1. 先设置传入的默认值 (作为基础)
+        if (defaultUser != null) userField.setText(defaultUser);
+        if (defaultPwd != null) pwdField.setText(defaultPwd);
+
+        // 2. 🔴 修复：总是尝试根据当前选中的 URI 加载历史凭证
+        // 即使 userField 有值（传入的默认用户），也应该优先显示该 URL 历史上绑定的账号密码
+        String currentUri = (String) uriCombo.getSelectedItem();
+        fillCredentialsForUri(currentUri);
 
         init();
     }
@@ -31,17 +38,34 @@ public class LogonDialog extends DialogWrapper {
     private void setupUriCombo(String defaultUri) {
         uriCombo.setEditable(true);
 
-        // 1. 从全局配置中加载历史记录
-        List<String> history = BapSettingsState.getInstance().uriHistory;
-        for (String url : history) {
-            uriCombo.addItem(url);
+        List<BapSettingsState.LoginProfile> history = BapSettingsState.getInstance().loginHistory;
+        for (BapSettingsState.LoginProfile profile : history) {
+            uriCombo.addItem(profile.uri);
         }
 
-        // 2. 设置默认选中项
         if (defaultUri != null && !defaultUri.isEmpty()) {
             uriCombo.setSelectedItem(defaultUri);
         } else if (uriCombo.getItemCount() > 0) {
             uriCombo.setSelectedIndex(0);
+        }
+
+        // 监听下拉框变化
+        uriCombo.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                fillCredentialsForUri((String) e.getItem());
+            }
+        });
+    }
+
+    // 辅助方法：查找并填充
+    private void fillCredentialsForUri(String uri) {
+        if (uri == null || uri.trim().isEmpty()) return;
+
+        BapSettingsState.LoginProfile profile = BapSettingsState.getInstance().getProfile(uri);
+        if (profile != null) {
+            // 只有当历史记录里有值时才覆盖
+            userField.setText(profile.user);
+            pwdField.setText(profile.password);
         }
     }
 
@@ -64,10 +88,13 @@ public class LogonDialog extends DialogWrapper {
 
     @Override
     protected void doOKAction() {
-        // 点击登录时，将当前 URI 存入历史记录 (自动去重/置顶)
         String currentUri = getUri();
+        String currentUser = getUser();
+        String currentPwd = getPwd();
+
         if (!currentUri.isEmpty()) {
-            BapSettingsState.getInstance().addUriToHistory(currentUri);
+            // 登录成功保存三元组
+            BapSettingsState.getInstance().addOrUpdateProfile(currentUri, currentUser, currentPwd);
         }
         super.doOKAction();
     }
