@@ -60,9 +60,9 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(autoRefreshCheckbox)
                 .addSeparator()
                 // --- 🔴 修改：使用 createColorRow 添加带重置按钮的行 ---
-                .addLabeledComponent("Modified Color (Yellow [M]):", createColorRow(modifiedColorPanel, JBColor.YELLOW))
-                .addLabeledComponent("Added Color (Blue [A]):", createColorRow(addedColorPanel, JBColor.BLUE))
-                .addLabeledComponent("Deleted Color (Red [D]):", createColorRow(deletedColorPanel, JBColor.RED))
+                .addLabeledComponent("Modified color:", createColorRow(modifiedColorPanel, JBColor.YELLOW))
+                .addLabeledComponent("Added color:", createColorRow(addedColorPanel, JBColor.BLUE))
+                .addLabeledComponent("Deleted color:", createColorRow(deletedColorPanel, JBColor.RED))
                 .addSeparator()
                 .addLabeledComponentFillVertically("Server URI History:", uriListPanel)
                 .getPanel();
