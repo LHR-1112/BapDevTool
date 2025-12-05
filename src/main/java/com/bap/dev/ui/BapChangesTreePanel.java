@@ -7,7 +7,8 @@ import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.icons.AllIcons;
-import com.intellij.ide.DataManager; // 确保引入 DataManager
+import com.intellij.ide.DataManager;
+import com.intellij.ide.util.treeView.TreeState; // 引入 TreeState
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
@@ -38,7 +39,6 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
-import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.*;
@@ -93,7 +93,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                // --- 🔴 修改点：双击触发比对 ---
                 if (e.getClickCount() == 2) {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
                     if (path != null) {
@@ -103,10 +102,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                             if (userObject instanceof VirtualFileWrapper) {
                                 VirtualFile file = ((VirtualFileWrapper) userObject).file;
                                 if (file.isValid() && !file.isDirectory()) {
-                                    // 尝试调用 Compare Action
+                                    // 双击比对
                                     AnAction compareAction = ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction");
                                     if (compareAction != null) {
-                                        // 构造 ActionEvent，传入当前的 DataContext (这会调用本类的 getData 方法，提供选中的文件)
                                         DataContext dataContext = DataManager.getInstance().getDataContext(tree);
                                         AnActionEvent event = AnActionEvent.createFromAnAction(compareAction, e, ActionPlaces.TOOLWINDOW_CONTENT, dataContext);
                                         compareAction.actionPerformed(event);
@@ -116,7 +114,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                         }
                     }
                 }
-                // ----------------------------
 
                 if (SwingUtilities.isRightMouseButton(e)) {
                     int row = tree.getClosestRowForLocation(e.getX(), e.getY());
@@ -135,10 +132,224 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         });
     }
 
-    // ... (其余代码保持不变，请直接复用之前的实现) ...
-    // ExpandAllAction, CollapseAllAction, LocateCurrentFileAction, rebuildTree, findAllBapModules, getData, ToolbarRefreshAction, getModuleRootFromNode, showContextMenu, findModuleRoot, addStatusCategory, 渲染器, 包装类 等
+    @Override
+    public void dispose() {
+    }
 
-    // 为了完整性，这里保留内部类结构，请填充内容
+    // --- 核心逻辑：重建树 ---
+    private void rebuildTree() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) return;
+
+            // 1. 保存当前状态 (展开、选中)
+            TreeState state = TreeState.createOn(tree);
+
+            DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+            root.removeAllChildren();
+
+            List<ModuleWrapper> bapModules = findAllBapModules();
+            bapModules.sort(Comparator.comparing(m -> m.name));
+
+            Map<String, BapFileStatus> statuses = BapFileStatusService.getInstance(project).getAllStatuses();
+
+            boolean hasAnyChanges = false;
+
+            for (ModuleWrapper moduleWrapper : bapModules) {
+                DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(moduleWrapper);
+                root.add(moduleNode);
+
+                Map<BapFileStatus, List<VirtualFile>> moduleChanges = new HashMap<>();
+
+                if (!statuses.isEmpty()) {
+                    for (Map.Entry<String, BapFileStatus> entry : statuses.entrySet()) {
+                        String path = entry.getKey();
+                        BapFileStatus status = entry.getValue();
+                        if (status == BapFileStatus.NORMAL) continue;
+
+                        if (path.startsWith(moduleWrapper.rootFile.getPath())) {
+                            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+                            // 对于 DELETED_LOCALLY，file 可能是 null 或无效，这里暂且只处理有效的或特殊处理
+                            // 如果是红D占位符，通常它是存在的
+                            if (file != null) {
+                                moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(file);
+                            }
+                        }
+                    }
+                }
+
+                if (!moduleChanges.isEmpty()) {
+                    hasAnyChanges = true;
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, "Modified");
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, "Added");
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, "Deleted");
+                }
+            }
+
+            treeModel.reload();
+
+            // 2. 恢复状态
+            state.applyTo(tree);
+
+            // 3. 如果是第一次加载或者没有状态，默认展开有内容的节点
+            // (state.applyTo 可能会覆盖这个，但如果有新节点，applyTo 不会处理)
+            if (state.isEmpty()) {
+                for (int i = 0; i < tree.getRowCount(); i++) {
+                    TreePath path = tree.getPathForRow(i);
+                    DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                    if (node.getChildCount() > 0) {
+                        tree.expandRow(i);
+                    }
+                }
+            }
+        });
+    }
+
+    // --- 包装类 (实现 equals/hashCode/toString 以支持 TreeState) ---
+
+    private static class ModuleWrapper {
+        String name;
+        VirtualFile rootFile;
+        ModuleWrapper(String name, VirtualFile rootFile) { this.name = name; this.rootFile = rootFile; }
+
+        @Override public String toString() { return name; } // TreeState 默认用 toString 作为 ID
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ModuleWrapper that = (ModuleWrapper) o;
+            return Objects.equals(rootFile.getPath(), that.rootFile.getPath());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(rootFile.getPath());
+        }
+    }
+
+    private static class CategoryWrapper {
+        String title; // 用于显示: "Modified (3)"
+        BapFileStatus status; // 用于逻辑标识
+
+        CategoryWrapper(String title, BapFileStatus status) { this.title = title; this.status = status; }
+
+        // 关键：toString 返回固定的标识符，不包含变动的数字
+        @Override public String toString() { return status.name(); }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CategoryWrapper that = (CategoryWrapper) o;
+            return status == that.status;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(status);
+        }
+    }
+
+    private static class VirtualFileWrapper {
+        VirtualFile file;
+        BapFileStatus status;
+        VirtualFileWrapper(VirtualFile file, BapFileStatus status) { this.file = file; this.status = status; }
+
+        @Override public String toString() { return file.getName(); }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            VirtualFileWrapper that = (VirtualFileWrapper) o;
+            return Objects.equals(file.getPath(), that.file.getPath());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(file.getPath());
+        }
+    }
+
+    // --- 以下方法保持不变，请直接复制之前的实现 ---
+    // findAllBapModules, getData, getFileFromPath, ToolbarRefreshAction, ExpandAllAction, CollapseAllAction, LocateCurrentFileAction, getModuleRootFromNode, findModuleRoot, showContextMenu, addStatusCategory, BapChangeRenderer
+
+    private List<ModuleWrapper> findAllBapModules() {
+        List<ModuleWrapper> result = new ArrayList<>();
+        if (project.isDisposed()) return result;
+        Module[] modules = ModuleManager.getInstance(project).getModules();
+        for (Module module : modules) {
+            VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
+            for (VirtualFile root : contentRoots) {
+                if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
+                    result.add(new ModuleWrapper(module.getName(), root));
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public @Nullable Object getData(@NotNull String dataId) {
+        if (CommonDataKeys.VIRTUAL_FILE.is(dataId)) {
+            TreePath path = tree.getSelectionPath();
+            if (path == null) return null;
+            return getFileFromPath(path);
+        }
+        if (CommonDataKeys.VIRTUAL_FILE_ARRAY.is(dataId)) {
+            TreePath[] paths = tree.getSelectionPaths();
+            if (paths == null || paths.length == 0) return null;
+            List<VirtualFile> files = new ArrayList<>();
+            for (TreePath path : paths) {
+                VirtualFile f = getFileFromPath(path);
+                if (f != null) files.add(f);
+            }
+            return files.isEmpty() ? null : files.toArray(new VirtualFile[0]);
+        }
+        return super.getData(dataId);
+    }
+
+    private VirtualFile getFileFromPath(TreePath path) {
+        DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+        Object userObject = node.getUserObject();
+        if (userObject instanceof VirtualFileWrapper) {
+            return ((VirtualFileWrapper) userObject).file;
+        } else if (userObject instanceof ModuleWrapper) {
+            return ((ModuleWrapper) userObject).rootFile;
+        }
+        return null;
+    }
+
+    private class ToolbarRefreshAction extends AnAction {
+        public ToolbarRefreshAction() { super("Refresh", "Refresh selected module", AllIcons.Actions.Refresh); }
+        @Override public void actionPerformed(@NotNull AnActionEvent e) { /* ... 代码同上 ... */
+            TreePath selectionPath = tree.getSelectionPath();
+            List<VirtualFile> modulesToRefresh = new ArrayList<>();
+            if (selectionPath != null) {
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) selectionPath.getLastPathComponent();
+                VirtualFile moduleRoot = getModuleRootFromNode(node);
+                if (moduleRoot != null) modulesToRefresh.add(moduleRoot);
+            }
+            if (modulesToRefresh.isEmpty()) {
+                // 刷新所有
+                List<ModuleWrapper> allBapModules = findAllBapModules();
+                for (ModuleWrapper m : allBapModules) modulesToRefresh.add(m.rootFile);
+            }
+            if (modulesToRefresh.isEmpty()) { rebuildTree(); return; }
+
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
+                @Override public void run(@NotNull ProgressIndicator indicator) {
+                    ProjectRefresher refresher = new ProjectRefresher(project);
+                    for (VirtualFile root : modulesToRefresh) {
+                        indicator.setText("Refreshing " + root.getName() + "...");
+                        refresher.refreshModule(root);
+                    }
+                }
+            });
+        }
+    }
+
     private class ExpandAllAction extends AnAction {
         public ExpandAllAction() { super("Expand All", "Expand all nodes", AllIcons.Actions.Expandall); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.expandAll(tree); }
@@ -148,7 +359,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.collapseAll(tree, 0); }
     }
     private class LocateCurrentFileAction extends AnAction {
-        public LocateCurrentFileAction() { super("Select Opened File", "Locate current opened file in the changes tree", AllIcons.General.Locate); }
+        public LocateCurrentFileAction() { super("Select Opened File", "Locate current opened file", AllIcons.General.Locate); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) {
             VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
             if (selectedFiles.length == 0) return;
@@ -184,120 +395,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             return null;
         }
     }
-    @Override public void dispose() {}
-    private void rebuildTree() {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (project.isDisposed()) return;
-            DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-            root.removeAllChildren();
-            List<ModuleWrapper> bapModules = findAllBapModules();
-            bapModules.sort(Comparator.comparing(m -> m.name));
-            Map<String, BapFileStatus> statuses = BapFileStatusService.getInstance(project).getAllStatuses();
-            for (ModuleWrapper moduleWrapper : bapModules) {
-                DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(moduleWrapper);
-                root.add(moduleNode);
-                Map<BapFileStatus, List<VirtualFile>> moduleChanges = new HashMap<>();
-                if (!statuses.isEmpty()) {
-                    for (Map.Entry<String, BapFileStatus> entry : statuses.entrySet()) {
-                        String path = entry.getKey();
-                        BapFileStatus status = entry.getValue();
-                        if (status == BapFileStatus.NORMAL) continue;
-                        if (path.startsWith(moduleWrapper.rootFile.getPath())) {
-                            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-                            if (file != null && file.isValid()) { moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(file); }
-                        }
-                    }
-                }
-                if (!moduleChanges.isEmpty()) {
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, "Modified");
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, "Added");
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, "Deleted");
-                }
-            }
-            treeModel.reload();
-            for (int i = 0; i < tree.getRowCount(); i++) {
-                TreePath path = tree.getPathForRow(i);
-                DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-                if (node.getChildCount() > 0) tree.expandRow(i);
-            }
-        });
-    }
-    private List<ModuleWrapper> findAllBapModules() {
-        List<ModuleWrapper> result = new ArrayList<>();
-        if (project.isDisposed()) return result;
-        Module[] modules = ModuleManager.getInstance(project).getModules();
-        for (Module module : modules) {
-            VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
-            for (VirtualFile root : contentRoots) {
-                if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
-                    result.add(new ModuleWrapper(module.getName(), root));
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-    @Override public @Nullable Object getData(@NotNull String dataId) {
-        if (CommonDataKeys.VIRTUAL_FILE.is(dataId)) {
-            TreePath path = tree.getSelectionPath();
-            if (path == null) return null;
-            return getFileFromPath(path);
-        }
-        if (CommonDataKeys.VIRTUAL_FILE_ARRAY.is(dataId)) {
-            TreePath[] paths = tree.getSelectionPaths();
-            if (paths == null || paths.length == 0) return null;
-            List<VirtualFile> files = new ArrayList<>();
-            for (TreePath path : paths) {
-                VirtualFile f = getFileFromPath(path);
-                if (f != null) files.add(f);
-            }
-            return files.isEmpty() ? null : files.toArray(new VirtualFile[0]);
-        }
-        return super.getData(dataId);
-    }
-    private VirtualFile getFileFromPath(TreePath path) {
-        DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-        Object userObject = node.getUserObject();
-        if (userObject instanceof VirtualFileWrapper) return ((VirtualFileWrapper) userObject).file;
-        else if (userObject instanceof ModuleWrapper) return ((ModuleWrapper) userObject).rootFile;
-        return null;
-    }
-    private class ToolbarRefreshAction extends AnAction {
-        public ToolbarRefreshAction() { super("Refresh", "Refresh selected module (or all if none selected)", AllIcons.Actions.Refresh); }
-        @Override public void actionPerformed(@NotNull AnActionEvent e) {
-            TreePath selectionPath = tree.getSelectionPath();
-            List<VirtualFile> modulesToRefresh = new ArrayList<>();
-            if (selectionPath != null) {
-                DefaultMutableTreeNode node = (DefaultMutableTreeNode) selectionPath.getLastPathComponent();
-                VirtualFile moduleRoot = getModuleRootFromNode(node);
-                if (moduleRoot != null) modulesToRefresh.add(moduleRoot);
-            }
-            if (modulesToRefresh.isEmpty()) {
-                DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                for (int i = 0; i < root.getChildCount(); i++) {
-                    TreeNode child = root.getChildAt(i);
-                    if (child instanceof DefaultMutableTreeNode) {
-                        Object userObj = ((DefaultMutableTreeNode) child).getUserObject();
-                        if (userObj instanceof ModuleWrapper) modulesToRefresh.add(((ModuleWrapper) userObj).rootFile);
-                    }
-                }
-            }
-            if (modulesToRefresh.isEmpty()) {
-                List<ModuleWrapper> allBapModules = findAllBapModules();
-                for (ModuleWrapper m : allBapModules) modulesToRefresh.add(m.rootFile);
-                if (modulesToRefresh.isEmpty()) { rebuildTree(); return; }
-            }
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
-                @Override public void run(@NotNull ProgressIndicator indicator) {
-                    ProjectRefresher refresher = new ProjectRefresher(project);
-                    for (VirtualFile root : modulesToRefresh) {
-                        indicator.setText("Refreshing " + root.getName() + "...");
-                        refresher.refreshModule(root);
-                    }
-                }
-            });
-        }
-    }
+
     private VirtualFile getModuleRootFromNode(DefaultMutableTreeNode node) {
         Object userObject = node.getUserObject();
         if (userObject instanceof ModuleWrapper) return ((ModuleWrapper) userObject).rootFile;
@@ -366,9 +464,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
                     String suffix = "";
                     BapSettingsState settings = BapSettingsState.getInstance();
-                    Color modColor = settings.getModifiedColorObj();
-                    Color addColor = settings.getAddedColorObj();
-                    Color delColor = settings.getDeletedColorObj();
+                    java.awt.Color modColor = settings.getModifiedColorObj();
+                    java.awt.Color addColor = settings.getAddedColorObj();
+                    java.awt.Color delColor = settings.getDeletedColorObj();
                     switch (wrapper.status) {
                         case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = " [M]"; break;
                         case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = " [A]"; break;
@@ -382,18 +480,5 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
             }
         }
-    }
-    private static class ModuleWrapper {
-        String name; VirtualFile rootFile;
-        ModuleWrapper(String name, VirtualFile rootFile) { this.name = name; this.rootFile = rootFile; }
-        @Override public String toString() { return name; }
-    }
-    private static class CategoryWrapper {
-        String title; BapFileStatus status;
-        CategoryWrapper(String title, BapFileStatus status) { this.title = title; this.status = status; }
-    }
-    private static class VirtualFileWrapper {
-        VirtualFile file; BapFileStatus status;
-        VirtualFileWrapper(VirtualFile file, BapFileStatus status) { this.file = file; this.status = status; }
     }
 }
