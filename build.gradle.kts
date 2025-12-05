@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.2.1"
+version = "1.3"
 
 repositories {
     mavenCentral()
@@ -74,6 +74,12 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.2.3</h3>
+            <ul>
+                <li><b>新特性</b>：BapChanges界面，增加一键收缩、展开、定位按钮</li>
+                <li><b>特性修改</b>：BapChanges界面，双击文件直接弹出云端与本地的对比</li>
+            </ul>
+            
             <h3>v1.2.1</h3>
             <ul>
                 <li><b>新特性</b>：设置中可更改文件状态的颜色</li>
