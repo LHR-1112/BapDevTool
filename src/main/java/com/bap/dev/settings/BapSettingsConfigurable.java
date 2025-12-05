@@ -1,5 +1,6 @@
 package com.bap.dev.settings;
 
+import com.bap.dev.activity.CheckUpdateActivity; // 引入检查更新类
 import com.intellij.openapi.options.Configurable;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColorPanel;
@@ -20,15 +21,16 @@ public class BapSettingsConfigurable implements Configurable {
 
     private JCheckBox compileOnPublishCheckbox;
     private JCheckBox autoRefreshCheckbox;
+    // --- 🔴 新增复选框 ---
+    private JCheckBox checkUpdateCheckbox;
+    // -------------------
 
-    private final CollectionListModel<String> uriListModel = new CollectionListModel<>();
-    private final JBList<String> uriList = new JBList<>(uriListModel);
-
-    // --- 🔴 新增颜色选择器 ---
     private ColorPanel modifiedColorPanel;
     private ColorPanel addedColorPanel;
     private ColorPanel deletedColorPanel;
-    // -----------------------
+
+    private final CollectionListModel<String> uriListModel = new CollectionListModel<>();
+    private final JBList<String> uriList = new JBList<>(uriListModel);
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -41,7 +43,22 @@ public class BapSettingsConfigurable implements Configurable {
         autoRefreshCheckbox = new JCheckBox("自动刷新文件状态 (Auto Refresh File Status)");
         autoRefreshCheckbox.setToolTipText("开启后，文件修改保存时会自动触发云端比对（可能会有网络延迟）");
 
-        // 初始化颜色面板
+        // --- 🔴 初始化新增组件 ---
+        checkUpdateCheckbox = new JCheckBox("启动时自动检查更新 (Check Update on Startup)");
+
+        JButton checkUpdateBtn = new JButton("检查更新");
+        checkUpdateBtn.addActionListener(e -> {
+            // 传入 null project (因为这是 Application 级别的设置页)，isManual = true
+            CheckUpdateActivity.runUpdateCheck(null, true);
+        });
+
+        // 将复选框和按钮放在一行，或者分行
+        JPanel updatePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        updatePanel.add(checkUpdateCheckbox);
+        updatePanel.add(Box.createHorizontalStrut(10));
+        updatePanel.add(checkUpdateBtn);
+        // -----------------------
+
         modifiedColorPanel = new ColorPanel();
         addedColorPanel = new ColorPanel();
         deletedColorPanel = new ColorPanel();
@@ -58,30 +75,22 @@ public class BapSettingsConfigurable implements Configurable {
         return FormBuilder.createFormBuilder()
                 .addComponent(compileOnPublishCheckbox)
                 .addComponent(autoRefreshCheckbox)
+                .addComponent(updatePanel) // 添加更新配置行
                 .addSeparator()
-                // --- 🔴 修改：使用 createColorRow 添加带重置按钮的行 ---
-                .addLabeledComponent("Modified color:", createColorRow(modifiedColorPanel, JBColor.YELLOW))
-                .addLabeledComponent("Added color:", createColorRow(addedColorPanel, JBColor.BLUE))
-                .addLabeledComponent("Deleted color:", createColorRow(deletedColorPanel, JBColor.RED))
+                .addLabeledComponent("Modified Color (Yellow [M]):", createColorRow(modifiedColorPanel, JBColor.YELLOW))
+                .addLabeledComponent("Added Color (Blue [A]):", createColorRow(addedColorPanel, JBColor.BLUE))
+                .addLabeledComponent("Deleted Color (Red [D]):", createColorRow(deletedColorPanel, JBColor.RED))
                 .addSeparator()
                 .addLabeledComponentFillVertically("Server URI History:", uriListPanel)
                 .getPanel();
     }
 
-    /**
-     * 辅助方法：创建颜色选择行（左侧颜色选择器，右侧重置按钮）
-     */
     private JPanel createColorRow(ColorPanel panel, Color defaultColor) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         row.add(panel);
-
-        JButton resetBtn = new JButton("use default");
+        JButton resetBtn = new JButton("还原");
         resetBtn.setToolTipText("Restore default color");
-        // 绑定事件：点击还原为默认颜色
-        resetBtn.addActionListener(e -> {
-            panel.setSelectedColor(defaultColor);
-        });
-
+        resetBtn.addActionListener(e -> panel.setSelectedColor(defaultColor));
         row.add(resetBtn);
         return row;
     }
@@ -92,19 +101,26 @@ public class BapSettingsConfigurable implements Configurable {
 
         boolean checkboxModified = compileOnPublishCheckbox.isSelected() != settings.compileOnPublish;
         boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
+        // --- 🔴 检查新增配置 ---
+        boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
+        // --------------------
 
-        // 🔴 比较列表：将 settings 中的对象列表转为 URI 字符串列表进行比较
         List<String> currentStoredUris = settings.loginHistory.stream()
                 .map(p -> p.uri)
                 .collect(Collectors.toList());
         boolean listModified = !uriListModel.getItems().equals(currentStoredUris);
 
-        // 检查颜色变动
-        boolean colorModified = !modifiedColorPanel.getSelectedColor().equals(settings.getModifiedColorObj()) ||
-                !addedColorPanel.getSelectedColor().equals(settings.getAddedColorObj()) ||
-                !deletedColorPanel.getSelectedColor().equals(settings.getDeletedColorObj());
+        boolean colorModified = !isColorEqual(modifiedColorPanel.getSelectedColor(), settings.getModifiedColorObj()) ||
+                !isColorEqual(addedColorPanel.getSelectedColor(), settings.getAddedColorObj()) ||
+                !isColorEqual(deletedColorPanel.getSelectedColor(), settings.getDeletedColorObj());
 
-        return checkboxModified || autoRefreshModified || listModified || colorModified;
+        return checkboxModified || autoRefreshModified || checkUpdateModified || listModified || colorModified;
+    }
+
+    private boolean isColorEqual(Color c1, Color c2) {
+        if (c1 == null && c2 == null) return true;
+        if (c1 == null || c2 == null) return false;
+        return c1.equals(c2);
     }
 
     @Override
@@ -112,27 +128,22 @@ public class BapSettingsConfigurable implements Configurable {
         BapSettingsState settings = BapSettingsState.getInstance();
         settings.compileOnPublish = compileOnPublishCheckbox.isSelected();
         settings.autoRefresh = autoRefreshCheckbox.isSelected();
+        // --- 🔴 保存新增配置 ---
+        settings.checkUpdateOnStartup = checkUpdateCheckbox.isSelected();
+        // --------------------
 
-        // --- 🔴 保存逻辑：智能合并 ---
-        // 我们只在界面上维护了 URI 列表，没有维护密码。
-        // 保存时，我们需要根据 UI 上的 URI 列表重建 loginHistory。
-        // 如果该 URI 之前存在，保留原本的 User/Pwd；如果不存在，创建新的。
         List<String> uiUris = uriListModel.getItems();
         List<BapSettingsState.LoginProfile> newHistory = new ArrayList<>();
-
         for (String uri : uiUris) {
             BapSettingsState.LoginProfile existing = settings.getProfile(uri);
             if (existing != null) {
-                // 保留旧的凭证
                 newHistory.add(existing);
             } else {
-                // 新增的 URI，密码留空
                 newHistory.add(new BapSettingsState.LoginProfile(uri, "", ""));
             }
         }
         settings.loginHistory = newHistory;
 
-        // 保存颜色
         if (modifiedColorPanel.getSelectedColor() != null) settings.setModifiedColorObj(modifiedColorPanel.getSelectedColor());
         if (addedColorPanel.getSelectedColor() != null) settings.setAddedColorObj(addedColorPanel.getSelectedColor());
         if (deletedColorPanel.getSelectedColor() != null) settings.setDeletedColorObj(deletedColorPanel.getSelectedColor());
@@ -143,16 +154,16 @@ public class BapSettingsConfigurable implements Configurable {
         BapSettingsState settings = BapSettingsState.getInstance();
         compileOnPublishCheckbox.setSelected(settings.compileOnPublish);
         autoRefreshCheckbox.setSelected(settings.autoRefresh);
+        // --- 🔴 重置新增配置 ---
+        checkUpdateCheckbox.setSelected(settings.checkUpdateOnStartup);
+        // --------------------
 
-        // --- 🔴 重置逻辑：从对象列表中提取 URI ---
         uriListModel.removeAll();
         List<String> uris = settings.loginHistory.stream()
                 .map(p -> p.uri)
                 .collect(Collectors.toList());
-
         uriListModel.addAll(0, uris);
 
-        // 重置颜色显示
         modifiedColorPanel.setSelectedColor(settings.getModifiedColorObj());
         addedColorPanel.setSelectedColor(settings.getAddedColorObj());
         deletedColorPanel.setSelectedColor(settings.getDeletedColorObj());
@@ -162,5 +173,9 @@ public class BapSettingsConfigurable implements Configurable {
     public void disposeUIResources() {
         compileOnPublishCheckbox = null;
         autoRefreshCheckbox = null;
+        checkUpdateCheckbox = null;
+        modifiedColorPanel = null;
+        addedColorPanel = null;
+        deletedColorPanel = null;
     }
 }

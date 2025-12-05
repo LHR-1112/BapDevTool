@@ -1,97 +1,119 @@
 package com.bap.dev.activity;
 
+import com.bap.dev.settings.BapSettingsState;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.notification.*;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState; // 引入这个
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.StartupActivity;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.util.io.HttpRequests;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class CheckUpdateActivity implements StartupActivity {
 
-    // 🔴 请替换为你的 GitHub 用户名和仓库名
     private static final String GITHUB_OWNER = "LHR-1112";
     private static final String GITHUB_REPO = "BapDevTool";
-
-    // 你的插件 ID (必须与 plugin.xml 中的 <id> 一致)
     private static final String PLUGIN_ID = "com.bap.dev.BapDevPlugin";
-
     private static final String API_URL = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/releases/latest";
 
     @Override
     public void runActivity(@NotNull Project project) {
+        if (!BapSettingsState.getInstance().checkUpdateOnStartup) {
+            return;
+        }
+
         System.out.println("Starting update check for Bap Plugin...");
-        // 在后台线程执行网络请求，避免卡顿 UI
+        runUpdateCheck(project, false);
+    }
+
+    public static void runUpdateCheck(@Nullable Project project, boolean isManual) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                checkForUpdates(project);
+                checkForUpdates(project, isManual);
             } catch (Exception e) {
-                // 网络错误通常忽略，不打扰用户
+                if (isManual) {
+                    // --- 🔴 修复点：添加 ModalityState.any() ---
+                    ApplicationManager.getApplication().invokeLater(() ->
+                                    Messages.showErrorDialog(project, "Check failed: " + e.getMessage(), "Update Error"),
+                            ModalityState.any()
+                    );
+                }
+                e.printStackTrace();
             }
         });
     }
 
-    private void checkForUpdates(Project project) {
-        try {
-            System.out.println("Checking for plugin updates...");
+    private static void checkForUpdates(@Nullable Project project, boolean isManual) throws Exception {
+        System.out.println("Checking for plugin updates...");
 
-            // 1. 获取当前插件版本
-            // 🔍 调试点 1：检查 ID 是否正确
-            PluginId id = PluginId.getId(PLUGIN_ID);
-            var pluginDescriptor = PluginManagerCore.getPlugin(id);
+        PluginId id = PluginId.getId(PLUGIN_ID);
+        var pluginDescriptor = PluginManagerCore.getPlugin(id);
 
-            if (pluginDescriptor == null) {
-                System.err.println("Error: 找不到插件描述信息! 请检查 PLUGIN_ID [" + PLUGIN_ID + "] 是否与 plugin.xml 中的 <id> 完全一致。");
-                return;
-            }
-
-            String currentVersion = pluginDescriptor.getVersion();
-            System.out.println("Current local version: " + currentVersion);
-
-            // 2. 请求 GitHub API
-            System.out.println("Requesting GitHub API: " + API_URL);
-            String response = HttpRequests.request(API_URL).readString();
-
-            // 🔍 调试点 2：打印 API 返回内容（防止返回空或错误信息）
-            // System.out.println("GitHub Response: " + response);
-
-            String latestVersion = extractTagName(response);
-            System.out.println("Latest version from GitHub: " + latestVersion);
-
-            if (latestVersion == null) {
-                System.err.println("Error: 无法从响应中提取 tag_name");
-                return;
-            }
-
-            // 3. 去除前缀
-            String cleanCurrent = currentVersion.replace("v", "");
-            String cleanLatest = latestVersion.replace("v", "");
-
-            // 4. 比较版本
-            if (compareVersion(cleanLatest, cleanCurrent) > 0) {
-                System.out.println("✨ New version detected! Preparing notification.");
+        if (pluginDescriptor == null) {
+            String msg = "Error: 找不到插件描述信息! ID: " + PLUGIN_ID;
+            System.err.println(msg);
+            if (isManual) {
+                // --- 🔴 修复点 ---
                 ApplicationManager.getApplication().invokeLater(() ->
-                        showUpdateNotification(project, currentVersion, latestVersion)
+                                Messages.showErrorDialog(project, msg, "Error"),
+                        ModalityState.any()
                 );
-            } else {
-                System.out.println("Up to date. No action needed.");
             }
+            return;
+        }
 
-        } catch (Exception e) {
-            // 🔍 调试点 3：必须打印异常，否则不知道网络请求为什么失败
-            System.err.println("Update check failed with exception:");
-            e.printStackTrace();
+        String currentVersion = pluginDescriptor.getVersion();
+        System.out.println("Current local version: " + currentVersion);
+
+        String response = HttpRequests.request(API_URL).readString();
+        String latestVersion = extractTagName(response);
+        System.out.println("Latest version from GitHub: " + latestVersion);
+
+        if (latestVersion == null) {
+            if (isManual) {
+                // --- 🔴 修复点 ---
+                ApplicationManager.getApplication().invokeLater(() ->
+                                Messages.showErrorDialog(project, "无法解析版本号", "Error"),
+                        ModalityState.any()
+                );
+            }
+            return;
+        }
+
+        String cleanCurrent = currentVersion.replace("v", "");
+        String cleanLatest = latestVersion.replace("v", "");
+
+        if (compareVersion(cleanLatest, cleanCurrent) > 0) {
+            // --- 🔴 修复点 ---
+            ApplicationManager.getApplication().invokeLater(() ->
+                            showUpdateNotification(project, currentVersion, latestVersion),
+                    ModalityState.any()
+            );
+        } else {
+            if (isManual) {
+                // --- 🔴 修复点 ---
+                ApplicationManager.getApplication().invokeLater(() ->
+                                Messages.showInfoMessage(project, "当前版本 (" + currentVersion + ") 已是最新。", "Check Update"),
+                        ModalityState.any()
+                );
+            }
         }
     }
 
-    private void showUpdateNotification(Project project, String current, String latest) {
+    private static void showUpdateNotification(@Nullable Project project, String current, String latest) {
+        // 如果 Project 为 null (从设置页手动检查时)，通知可能无法显示在特定项目窗口
+        // 但 createNotification 会尝试查找活动窗口，通常没问题
         NotificationGroup group = NotificationGroupManager.getInstance()
-                .getNotificationGroup("Bap Update Notification");
+                .getNotificationGroup("Cloud Project Download");
+
+        if (group == null) return;
 
         String content = String.format(
                 "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>" +
@@ -100,12 +122,11 @@ public class CheckUpdateActivity implements StartupActivity {
         );
 
         Notification notification = group.createNotification("Bap Plugin Update", content, NotificationType.INFORMATION);
-        notification.setListener(NotificationListener.URL_OPENING_LISTENER); // 让链接可点击
+        notification.setListener(NotificationListener.URL_OPENING_LISTENER);
         notification.notify(project);
     }
 
-    // 简单的正则提取 "tag_name": "v1.2.0"
-    private String extractTagName(String json) {
+    private static String extractTagName(String json) {
         Pattern pattern = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
@@ -114,11 +135,7 @@ public class CheckUpdateActivity implements StartupActivity {
         return null;
     }
 
-    /**
-     * 版本号比较逻辑
-     * @return 1 if v1 > v2, -1 if v1 < v2, 0 if equal
-     */
-    private int compareVersion(String v1, String v2) {
+    private static int compareVersion(String v1, String v2) {
         String[] parts1 = v1.split("\\.");
         String[] parts2 = v2.split("\\.");
         int length = Math.max(parts1.length, parts2.length);
