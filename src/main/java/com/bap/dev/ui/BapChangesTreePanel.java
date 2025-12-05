@@ -477,6 +477,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     if (wrapper.file.isDirectory()) setIcon(AllIcons.Nodes.Folder);
                     else if ("java".equalsIgnoreCase(wrapper.file.getExtension())) setIcon(AllIcons.FileTypes.Java);
                     else setIcon(AllIcons.FileTypes.Text);
+
                 }
             }
         }
