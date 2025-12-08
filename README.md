@@ -2,7 +2,7 @@
 
 基于原有 Eclipse 云开发插件重构的 **IntelliJ IDEA** 版本。
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/your-repo/bapdevtools?style=for-the-badge)](https://github.com/LHR-1112/BapDevTool/releases)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/LHR-1112/BapDevTool?style=for-the-badge)](https://github.com/LHR-1112/BapDevTool/releases)
 
 ---
 
