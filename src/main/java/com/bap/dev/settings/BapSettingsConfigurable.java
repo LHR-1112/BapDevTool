@@ -77,9 +77,9 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(autoRefreshCheckbox)
                 .addComponent(updatePanel) // 添加更新配置行
                 .addSeparator()
-                .addLabeledComponent("Modified Color (Yellow [M]):", createColorRow(modifiedColorPanel, JBColor.YELLOW))
-                .addLabeledComponent("Added Color (Blue [A]):", createColorRow(addedColorPanel, JBColor.BLUE))
-                .addLabeledComponent("Deleted Color (Red [D]):", createColorRow(deletedColorPanel, JBColor.RED))
+                .addLabeledComponent("Modified color:", createColorRow(modifiedColorPanel, JBColor.YELLOW))
+                .addLabeledComponent("Added color:", createColorRow(addedColorPanel, JBColor.BLUE))
+                .addLabeledComponent("Deleted color:", createColorRow(deletedColorPanel, JBColor.RED))
                 .addSeparator()
                 .addLabeledComponentFillVertically("Server URI History:", uriListPanel)
                 .getPanel();
