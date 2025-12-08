@@ -38,7 +38,7 @@ import java.nio.file.Files;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class UpdateJavaCodeAction extends AnAction {
+public class UpdateFileAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {

@@ -98,8 +98,8 @@
                     description="Revert all local changes to cloud version"
                     icon="AllIcons.Actions.CheckOut"/>
 
-            <action id="com.bap.dev.action.UpdateJavaCodeAction"
-                    class="com.bap.dev.action.UpdateJavaCodeAction"
+            <action id="com.bap.dev.action.UpdateFileAction"
+                    class="com.bap.dev.action.UpdateFileAction"
                     text="Update"
                     description="Overwrite local file with cloud version"
                     icon="AllIcons.Actions.Download"/>
@@ -132,8 +132,8 @@
                     description="Commit all changes in module"
                     icon="AllIcons.Actions.Commit"/>
 
-            <action id="com.bap.dev.action.CommitJavaCodeAction"
-                    class="com.bap.dev.action.CommitJavaCodeAction"
+            <action id="com.bap.dev.action.CommitFileAction"
+                    class="com.bap.dev.action.CommitFileAction"
                     text="Commit"
                     description="Upload local code to cloud"
                     icon="AllIcons.Actions.Upload"/>
