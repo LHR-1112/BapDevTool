@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.service.BapConnectionManager;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.contents.DiffContent;
@@ -134,7 +135,7 @@ public class CompareJavaCodeAction extends AnAction {
             return;
         }
 
-        BapRpcClient client = new BapRpcClient();
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
             client.connect(uri, user, pwd);
             Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);

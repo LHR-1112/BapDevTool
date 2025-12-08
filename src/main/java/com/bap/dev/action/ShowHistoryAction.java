@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaConst;
 import bap.md.ver.VersionNode;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.ui.HistoryListDialog;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
@@ -93,7 +94,7 @@ public class ShowHistoryAction extends AnAction {
             return;
         }
 
-        BapRpcClient client = new BapRpcClient();
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
             client.connect(uri, user, pwd);
 
