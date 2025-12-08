@@ -1,9 +1,6 @@
 package com.bap.dev.action;
 
-import bap.java.CJavaCode;
-import bap.java.CJavaConst;
-import bap.java.CJavaFolderDto;
-import bap.java.CommitPackage;
+import bap.java.*;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapFileStatus;
@@ -65,12 +62,32 @@ public class CommitJavaCodeAction extends AnAction {
             return;
         }
 
+        // --- 🔴 新增：预先读取配置信息 ---
+        String targetUri = "Unknown";
+        String targetProject = "Unknown";
+        try {
+            File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+            if (confFile.exists()) {
+                String content = Files.readString(confFile.toPath());
+                String u = extractAttr(content, "Uri");
+                if (u != null) targetUri = u;
+                String projectUuid = extractAttr(content, "Project");
+                BapRpcClient client = prepareClient(moduleRoot);
+                CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
+                if (javaProject != null) {
+                    String name = javaProject.getName();
+                    if (name != null) targetProject = name;
+                }
+            }
+        } catch (Exception ignore) {}
+        // -----------------------------
+
         // --- 修改开始：使用自定义合并弹窗 ---
-        CommitDialog dialog = new CommitDialog(project, Arrays.asList(selectedFiles));
+        CommitDialog dialog = new CommitDialog(project, Arrays.asList(selectedFiles), targetUri, targetProject);
         if (dialog.showAndGet()) {
             String comments = dialog.getComment();
 
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing Files...", true) {
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing files...", true) {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     indicator.setIndeterminate(true);
@@ -374,12 +391,16 @@ public class CommitJavaCodeAction extends AnAction {
     private static class CommitDialog extends DialogWrapper {
         private final List<VirtualFile> files;
         private final Project project;
+        private final String targetUri;
+        private final String targetProject;
         private JBTextArea commentArea;
 
-        protected CommitDialog(Project project, List<VirtualFile> files) {
+        protected CommitDialog(Project project, List<VirtualFile> files, String targetUri, String targetProject) {
             super(project);
             this.project = project;
             this.files = files;
+            this.targetUri = targetUri;
+            this.targetProject = targetProject;
             setTitle("Commit Selected Files");
             setOKButtonText("Commit");
             init();
@@ -388,21 +409,33 @@ public class CommitJavaCodeAction extends AnAction {
         @Override
         protected @Nullable JComponent createCenterPanel() {
             JPanel dialogPanel = new JPanel(new BorderLayout(0, 10));
-            dialogPanel.setPreferredSize(new Dimension(600, 450));
+            dialogPanel.setPreferredSize(new Dimension(600, 500));
 
-            // 1. 上半部分：文件列表预览
+            // 0. 顶部：服务器和工程信息 (新增)
+            JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 5));
+            infoPanel.setBorder(BorderFactory.createTitledBorder("Target Environment"));
+
+            JLabel uriLabel = new JLabel("Server: " + targetUri);
+            uriLabel.setForeground(new Color(0, 100, 0)); // 深绿色
+            JLabel projLabel = new JLabel("Project: " + targetProject);
+            projLabel.setForeground(new Color(0, 0, 150)); // 深蓝色
+
+            infoPanel.add(uriLabel);
+            infoPanel.add(projLabel);
+
+            // 1. 中部：文件列表
             String fileListText = buildFileListText();
             JTextArea fileListArea = new JTextArea(fileListText);
             fileListArea.setEditable(false);
             fileListArea.setBackground(null);
             fileListArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 
-            JLabel fileLabel = new JLabel("Selected files to commit (" + files.size() + " files):");
+            JLabel fileLabel = new JLabel("Files to commit (" + files.size() + "):");
             JPanel filePanel = new JPanel(new BorderLayout(0, 5));
             filePanel.add(fileLabel, BorderLayout.NORTH);
             filePanel.add(new JBScrollPane(fileListArea), BorderLayout.CENTER);
 
-            // 2. 下半部分：注释输入
+            // 2. 底部：注释输入
             JLabel commentLabel = new JLabel("Commit Message:");
             commentArea = new JBTextArea(4, 50);
             commentArea.setLineWrap(true);
@@ -413,6 +446,7 @@ public class CommitJavaCodeAction extends AnAction {
             commentPanel.add(new JBScrollPane(commentArea), BorderLayout.CENTER);
 
             // 布局组装
+            dialogPanel.add(infoPanel, BorderLayout.NORTH); // 加到顶部
             dialogPanel.add(filePanel, BorderLayout.CENTER);
             dialogPanel.add(commentPanel, BorderLayout.SOUTH);
 

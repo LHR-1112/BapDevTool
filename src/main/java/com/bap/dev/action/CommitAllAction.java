@@ -1,9 +1,6 @@
 package com.bap.dev.action;
 
-import bap.java.CJavaCode;
-import bap.java.CJavaConst;
-import bap.java.CJavaFolderDto;
-import bap.java.CommitPackage;
+import bap.java.*;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
 import com.bap.dev.listener.BapChangesNotifier;
@@ -81,11 +78,45 @@ public class CommitAllAction extends AnAction {
                         return;
                     }
 
+                    // --- 🔴 新增：获取工程名称逻辑 (后台线程执行，避免卡顿) ---
+                    String[] targetInfo = new String[]{"Unknown", "Unknown"}; // [0]=Uri, [1]=ProjectName
+                    try {
+                        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+                        String content = Files.readString(confFile.toPath());
+                        String uri = extractAttr(content, "Uri");
+                        String user = extractAttr(content, "User");
+                        String pwd = extractAttr(content, "Password");
+                        String projectUuid = extractAttr(content, "Project");
+
+                        if (uri != null) targetInfo[0] = uri;
+                        if (projectUuid != null) targetInfo[1] = projectUuid; // 默认显示 UUID
+
+                        // 尝试通过 RPC 获取工程名称
+                        if (uri != null && user != null && pwd != null && projectUuid != null) {
+                            indicator.setText("Fetching project info...");
+                            BapRpcClient client = new BapRpcClient();
+                            try {
+                                client.connect(uri, user, pwd);
+                                CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
+                                if (javaProject != null) {
+                                    String name = javaProject.getName();
+                                    if (name != null && !name.isEmpty()) {
+                                        targetInfo[1] = name; // 替换为工程名
+                                    }
+                                }
+                            } catch (Exception ignore) {
+                                // 网络错误忽略，保持显示 UUID
+                            } finally {
+                                client.shutdown();
+                            }
+                        }
+                    } catch (Exception ignore) {}
+                    // --------------------------------------------------
+
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        // 使用自定义的合并弹窗
-                        CommitDialog dialog = new CommitDialog(project, changedFiles);
+                        // 传入获取到的 targetInfo
+                        CommitDialog dialog = new CommitDialog(project, changedFiles, targetInfo[0], targetInfo[1]);
                         if (dialog.showAndGet()) {
-                            // 用户点击 OK，获取注释并开始提交
                             String comments = dialog.getComment();
                             startBatchCommit(project, moduleRoot, changedFiles, comments);
                         }
@@ -400,21 +431,37 @@ public class CommitAllAction extends AnAction {
     private static class CommitDialog extends DialogWrapper {
         private final List<VirtualFile> files;
         private final Project project;
+        private final String targetUri;
+        private final String targetProject;
         private JBTextArea commentArea;
 
-        protected CommitDialog(Project project, List<VirtualFile> files) {
+        protected CommitDialog(Project project, List<VirtualFile> files, String targetUri, String targetProject) {
             super(project);
             this.project = project;
             this.files = files;
-            setTitle("Commit Files");
-            setOKButtonText("Commit");
+            this.targetUri = targetUri;
+            this.targetProject = targetProject;
+            setTitle("Commit All Files"); // 标题略有不同
+            setOKButtonText("Commit All");
             init();
         }
 
         @Override
         protected @Nullable JComponent createCenterPanel() {
             JPanel dialogPanel = new JPanel(new BorderLayout(0, 10));
-            dialogPanel.setPreferredSize(new Dimension(600, 450));
+            dialogPanel.setPreferredSize(new Dimension(600, 500));
+
+            // 0. 顶部：服务器和工程信息
+            JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 5));
+            infoPanel.setBorder(BorderFactory.createTitledBorder("Target Environment"));
+
+            JLabel uriLabel = new JLabel("Server: " + targetUri);
+            uriLabel.setForeground(new Color(0, 100, 0)); // 深绿色
+            JLabel projLabel = new JLabel("Project: " + targetProject);
+            projLabel.setForeground(new Color(0, 0, 150)); // 深蓝色
+
+            infoPanel.add(uriLabel);
+            infoPanel.add(projLabel);
 
             // 1. 上半部分：文件列表预览
             String fileListText = buildFileListText();
@@ -440,6 +487,7 @@ public class CommitAllAction extends AnAction {
             commentPanel.add(new JBScrollPane(commentArea), BorderLayout.CENTER);
 
             // 布局组装
+            dialogPanel.add(infoPanel, BorderLayout.NORTH);
             dialogPanel.add(filePanel, BorderLayout.CENTER);
             dialogPanel.add(commentPanel, BorderLayout.SOUTH);
 
