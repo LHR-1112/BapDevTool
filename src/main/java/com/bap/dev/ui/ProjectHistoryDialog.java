@@ -3,11 +3,9 @@ package com.bap.dev.ui;
 import bap.java.CJavaCode;
 import bap.md.ver.VersionNode;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.service.BapConnectionManager;
 import com.intellij.diff.DiffContentFactory;
-import com.intellij.diff.DiffDialogHints;
-import com.intellij.diff.DiffManager;
 import com.intellij.diff.chains.SimpleDiffRequestChain;
-import com.intellij.diff.contents.DiffContent;
 import com.intellij.diff.editor.ChainDiffVirtualFile;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.icons.AllIcons;
@@ -16,11 +14,8 @@ import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -52,11 +47,9 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ProjectHistoryDialog extends DialogWrapper {
 
@@ -265,7 +258,7 @@ public class ProjectHistoryDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching Code...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
                     CJavaCode historyCode = client.getService().getHistoryCode(node.getUuid());
@@ -336,7 +329,7 @@ public class ProjectHistoryDialog extends DialogWrapper {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
 
@@ -389,7 +382,7 @@ public class ProjectHistoryDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching Cloud Code...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     // 查找本地文件
                     VirtualFile localFile = ReadAction.compute(() -> {

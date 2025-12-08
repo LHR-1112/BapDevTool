@@ -3,6 +3,7 @@ package com.bap.dev.ui;
 import bap.java.CJavaCode;
 import bap.md.ver.VersionNode;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.service.BapConnectionManager;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.chains.SimpleDiffRequestChain;
 import com.intellij.diff.editor.ChainDiffVirtualFile;
@@ -246,7 +247,7 @@ public class HistoryListDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching Code...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
                     CJavaCode historyCode = client.getService().getHistoryCode(node.getUuid());
@@ -293,7 +294,7 @@ public class HistoryListDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching Codes...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
 
@@ -323,7 +324,7 @@ public class HistoryListDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching History Code...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
                     CJavaCode historyCode = client.getService().getHistoryCode(node.getUuid());
@@ -346,7 +347,7 @@ public class HistoryListDialog extends DialogWrapper {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Restoring...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 try {
                     client.connect(uri, user, pwd);
                     CJavaCode historyCode = client.getService().getHistoryCode(node.getUuid());
