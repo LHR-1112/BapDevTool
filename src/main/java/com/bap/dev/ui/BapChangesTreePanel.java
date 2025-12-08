@@ -354,10 +354,12 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         public ExpandAllAction() { super("Expand All", "Expand all nodes", AllIcons.Actions.Expandall); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.expandAll(tree); }
     }
+
     private class CollapseAllAction extends AnAction {
         public CollapseAllAction() { super("Collapse All", "Collapse all nodes", AllIcons.Actions.Collapseall); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.collapseAll(tree, 0); }
     }
+
     private class LocateCurrentFileAction extends AnAction {
         public LocateCurrentFileAction() { super("Select Opened File", "Locate current opened file", AllIcons.General.Locate); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) {
@@ -406,6 +408,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         else if (userObject instanceof VirtualFileWrapper) return findModuleRoot(((VirtualFileWrapper) userObject).file);
         return null;
     }
+
     private VirtualFile findModuleRoot(VirtualFile file) {
         VirtualFile dir = file.isDirectory() ? file : file.getParent();
         while (dir != null) {
@@ -414,24 +417,42 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         }
         return null;
     }
+
     private void showContextMenu(DefaultMutableTreeNode node, MouseEvent e) {
         Object userObject = node.getUserObject();
         DefaultActionGroup group = new DefaultActionGroup();
+        ActionManager am = ActionManager.getInstance();
+
         if (userObject instanceof ModuleWrapper) {
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.RefreshProjectAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.PublishProjectAction"));
+            // --- 模块级操作 ---
+            group.add(am.getAction("com.bap.dev.action.RefreshProjectAction"));
+            group.addSeparator();
+            group.add(am.getAction("com.bap.dev.action.UpdateLibsAction")); // 依赖更新
+            group.add(am.getAction("com.bap.dev.action.UpdateAllAction"));
+            group.addSeparator();
+            group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction")); // 项目历史
+            group.addSeparator();
+            group.add(am.getAction("com.bap.dev.action.CommitAllAction"));
+            group.add(am.getAction("com.bap.dev.action.PublishProjectAction"));
+            group.addSeparator();
+            group.add(am.getAction("com.bap.dev.action.RelocateProjectAction")); // 重定向
+            group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));   // Admin Tool
+
         } else if (userObject instanceof VirtualFileWrapper) {
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitJavaCodeAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateJavaCodeAction"));
-            group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction"));
+            // --- 文件级操作 ---
+            group.add(am.getAction("com.bap.dev.action.UpdateJavaCodeAction"));
+            group.add(am.getAction("com.bap.dev.action.CommitJavaCodeAction"));
+            group.addSeparator();
+            group.add(am.getAction("com.bap.dev.action.CompareJavaCodeAction"));
+            group.add(am.getAction("com.bap.dev.action.ShowHistoryAction")); // 单文件历史
         }
+
         if (group.getChildrenCount() > 0) {
-            ActionPopupMenu popupMenu = ActionManager.getInstance().createActionPopupMenu("BapChangesPopup", group);
+            ActionPopupMenu popupMenu = am.createActionPopupMenu("BapChangesPopup", group);
             popupMenu.getComponent().show(e.getComponent(), e.getX(), e.getY());
         }
     }
+
     private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFile>> map, BapFileStatus status, String title) {
         List<VirtualFile> files = map.get(status);
         if (files != null && !files.isEmpty()) {
@@ -443,6 +464,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             }
         }
     }
+
     private static class BapChangeRenderer extends ColoredTreeCellRenderer {
         @Override public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
             if (value instanceof DefaultMutableTreeNode) {
