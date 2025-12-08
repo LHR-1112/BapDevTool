@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.3"
+version = "1.2.2"
 
 repositories {
     mavenCentral()
@@ -74,10 +74,15 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
-            <h3>v1.2.3</h3>
+            <h3>v1.3</h3>
             <ul>
                 <li><b>新特性</b>：BapChanges界面，增加一键收缩、展开、定位按钮</li>
                 <li><b>特性修改</b>：BapChanges界面，双击文件直接弹出云端与本地的对比</li>
+                <li><b>bug修复</b>：蓝A的资源文件，点击update无法删除</li>
+                <li><b>新特性</b>：commit的时候，提示目标服务器与工程信息</li>
+                <li><b>特性修改</b>：修改设置界面中，颜色修改的属性名称</li>
+                <li><b>特性修改</b>：丰富BapChangesTreePanel的右键菜单，与项目树的保持一致</li>
+                <li><b>特性修改</b>：将部分操作获取BapClient的方法改为通过BapConnectionManager获取长连接</li>
             </ul>
             
             <h3>v1.2.1</h3>

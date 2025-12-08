@@ -25,7 +25,7 @@
 
 本插件在以下环境中进行过测试：
 
-* **系统**: macOS X
+* **系统**: MacOS X
 * **CPU**: Apple Silicon M4
 * **IDE**: IntelliJ IDEA 2025.1.3 (Ultimate Edition)
 * **JDK**: Oracle OpenJDK 24.0.1 - aarch64
@@ -52,9 +52,14 @@
 
 ## 📜 变更日志 (ChangeLog)
 
-### v1.3
+### v1.2.2
 * **新特性**：BapChanges界面，增加一键收缩、展开、定位按钮
 * **特性修改**：BapChanges界面，双击文件直接弹出云端与本地的对比
+* **bug修复**：蓝A的资源文件，点击update无法删除
+* **新特性**：commit的时候，提示目标服务器与工程信息
+* **特性修改**：修改设置界面中，颜色修改的属性名称
+* **特性修改**：丰富BapChangesTreePanel的右键菜单，与项目树的保持一致
+* **特性修改**：将部分操作获取BapClient的方法改为通过BapConnectionManager获取长连接
 
 ### v1.2.1
 * **新特性**：设置中可更改文件状态的颜色
