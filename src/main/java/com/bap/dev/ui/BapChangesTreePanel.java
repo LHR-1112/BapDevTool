@@ -68,8 +68,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         group.add(new LocateCurrentFileAction());
 
         group.addSeparator();
-        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitJavaCodeAction"));
-        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateJavaCodeAction"));
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitFileAction"));
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateFileAction"));
         group.addSeparator();
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
@@ -440,8 +440,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
         } else if (userObject instanceof VirtualFileWrapper) {
             // --- 文件级操作 ---
-            group.add(am.getAction("com.bap.dev.action.UpdateJavaCodeAction"));
-            group.add(am.getAction("com.bap.dev.action.CommitJavaCodeAction"));
+            group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
+            group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CompareJavaCodeAction"));
             group.add(am.getAction("com.bap.dev.action.ShowHistoryAction")); // 单文件历史
