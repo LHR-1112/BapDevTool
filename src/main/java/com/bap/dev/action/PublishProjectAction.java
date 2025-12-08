@@ -2,6 +2,7 @@ package com.bap.dev.action;
 
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
@@ -70,7 +71,7 @@ public class PublishProjectAction extends AnAction {
             return;
         }
 
-        BapRpcClient client = new BapRpcClient();
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
             indicator.setIndeterminate(true);
             indicator.setText("Connecting to server...");
