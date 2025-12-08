@@ -144,7 +144,7 @@ public class UpdateJavaCodeAction extends AnAction {
                     // 或者我们可以设定策略：Update 操作对于蓝A文件不做处理 (因为它本来就只在本地有)
                     // 如果想强行同步（即删除本地），可以使用 deleteLocalFile(project, file);
 
-                    // 这里为了安全，仅打印日志，不做删除
+                    deleteLocalFile(project, file);
                     System.out.println("Skipping local-only file: " + file.getName());
                 }
             }
