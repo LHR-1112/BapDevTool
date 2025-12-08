@@ -4,6 +4,7 @@ import bap.java.*;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
 import com.bap.dev.listener.BapChangesNotifier;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
 import com.intellij.notification.Notification;
@@ -94,7 +95,7 @@ public class CommitAllAction extends AnAction {
                         // 尝试通过 RPC 获取工程名称
                         if (uri != null && user != null && pwd != null && projectUuid != null) {
                             indicator.setText("Fetching project info...");
-                            BapRpcClient client = new BapRpcClient();
+                            BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                             try {
                                 client.connect(uri, user, pwd);
                                 CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
@@ -134,7 +135,7 @@ public class CommitAllAction extends AnAction {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing Files...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                BapRpcClient client = null;
                 try {
                     File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
                     String content = Files.readString(confFile.toPath());
@@ -144,7 +145,7 @@ public class CommitAllAction extends AnAction {
                     String projectUuid = extractAttr(content, "Project");
 
                     indicator.setText("Connecting...");
-                    client.connect(uri, user, pwd);
+                    client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
 
                     List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
 

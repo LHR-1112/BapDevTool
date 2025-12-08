@@ -4,6 +4,7 @@ import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.listener.BapChangesNotifier;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
 import com.intellij.notification.Notification;
@@ -120,7 +121,16 @@ public class UpdateJavaCodeAction extends AnAction {
         String relativePath = getResourceRelativePath(moduleRoot, file);
         if (relativePath == null) throw new Exception("无法计算资源路径");
 
-        BapRpcClient client = prepareClient(moduleRoot);
+        // --- 🔴 修改开始：手动读取配置并使用 BapConnectionManager ---
+        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+        String content = Files.readString(confFile.toPath());
+        String uri = extractAttr(content, "Uri");
+        String user = extractAttr(content, "User");
+        String pwd = extractAttr(content, "Password");
+
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
+        // --- 🔴 修改结束 ---
+
         String projectUuid = getProjectUuid(moduleRoot);
 
         try {
@@ -158,7 +168,16 @@ public class UpdateJavaCodeAction extends AnAction {
         String fullClassName = resolveClassName(project, file);
         if (fullClassName == null) throw new Exception("无法解析类名");
 
-        BapRpcClient client = prepareClient(moduleRoot);
+        // --- 🔴 修改开始：手动读取配置并使用 BapConnectionManager ---
+        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+        String content = Files.readString(confFile.toPath());
+        String uri = extractAttr(content, "Uri");
+        String user = extractAttr(content, "User");
+        String pwd = extractAttr(content, "Password");
+
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
+        // --- 🔴 修改结束 ---
+
         String projectUuid = getProjectUuid(moduleRoot);
 
         try {
@@ -220,20 +239,6 @@ public class UpdateJavaCodeAction extends AnAction {
                 showError("删除失败: " + e.getMessage());
             }
         });
-    }
-
-    // ... (辅助方法: prepareClient, getProjectUuid, isResourceFile, getResourceRelativePath, resolveClassName, findModuleRoot, extractAttr, showError, sendNotification, update, getActionUpdateThread) ...
-    // 请直接复制原文件中的这些方法，保持不变
-
-    private BapRpcClient prepareClient(VirtualFile moduleRoot) throws Exception {
-        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-        String content = Files.readString(confFile.toPath());
-        String uri = extractAttr(content, "Uri");
-        String user = extractAttr(content, "User");
-        String pwd = extractAttr(content, "Password");
-        BapRpcClient client = new BapRpcClient();
-        client.connect(uri, user, pwd);
-        return client;
     }
 
     private String getProjectUuid(VirtualFile moduleRoot) throws Exception {

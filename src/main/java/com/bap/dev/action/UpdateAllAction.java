@@ -5,6 +5,7 @@ import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
 import com.bap.dev.listener.BapChangesNotifier;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
 import com.intellij.notification.Notification;
@@ -92,7 +93,8 @@ public class UpdateAllAction extends AnAction {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Files...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                BapRpcClient client = new BapRpcClient();
+                // --- 🔴 修改：client 初始化为 null ---
+                BapRpcClient client = null;
                 int successCount = 0;
                 int failCount = 0;
 
@@ -105,7 +107,7 @@ public class UpdateAllAction extends AnAction {
                     String projectUuid = extractAttr(content, "Project");
 
                     indicator.setText("Connecting...");
-                    client.connect(uri, user, pwd);
+                    client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
 
                     int count = 0;
                     for (VirtualFile file : files) {

@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.*;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.listener.BapChangesNotifier;
+import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
 import com.intellij.notification.Notification;
@@ -69,10 +70,14 @@ public class CommitJavaCodeAction extends AnAction {
             File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
             if (confFile.exists()) {
                 String content = Files.readString(confFile.toPath());
-                String u = extractAttr(content, "Uri");
-                if (u != null) targetUri = u;
+                String uri = extractAttr(content, "Uri");
                 String projectUuid = extractAttr(content, "Project");
-                BapRpcClient client = prepareClient(moduleRoot);
+                String user = extractAttr(content, "User");
+                String pwd = extractAttr(content, "Password");
+
+                if (uri != null) targetUri = uri;
+
+                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                 CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
                 if (javaProject != null) {
                     String name = javaProject.getName();
@@ -104,7 +109,19 @@ public class CommitJavaCodeAction extends AnAction {
     }
 
     private void commitWithPackage(Project project, VirtualFile moduleRoot, VirtualFile[] files, String comments) throws Exception {
-        BapRpcClient client = prepareClient(moduleRoot);
+
+        // --- 🔴 修改开始：使用 BapConnectionManager 获取连接 ---
+        // 1. 手动读取配置获取连接信息
+        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+        String content = Files.readString(confFile.toPath());
+        String uri = extractAttr(content, "Uri");
+        String user = extractAttr(content, "User");
+        String pwd = extractAttr(content, "Password");
+
+        // 2. 获取共享的长连接客户端
+        BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
+        // --- 🔴 修改结束 ---
+
         String projectUuid = getProjectUuid(moduleRoot);
 
         try {
@@ -290,17 +307,6 @@ public class CommitJavaCodeAction extends AnAction {
 
     private String findFolderUuid(List<CJavaFolderDto> folders, String name) {
         return folders.stream().filter(f -> f.getName().equals(name)).map(CJavaFolderDto::getUuid).findFirst().orElse(null);
-    }
-
-    private BapRpcClient prepareClient(VirtualFile moduleRoot) throws Exception {
-        File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-        String content = Files.readString(confFile.toPath());
-        String uri = extractAttr(content, "Uri");
-        String user = extractAttr(content, "User");
-        String pwd = extractAttr(content, "Password");
-        BapRpcClient client = new BapRpcClient();
-        client.connect(uri, user, pwd);
-        return client;
     }
 
     private String getProjectUuid(VirtualFile moduleRoot) throws Exception {
