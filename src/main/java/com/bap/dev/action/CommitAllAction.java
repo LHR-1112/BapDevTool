@@ -457,9 +457,7 @@ public class CommitAllAction extends AnAction {
             infoPanel.setBorder(BorderFactory.createTitledBorder("Target Environment"));
 
             JLabel uriLabel = new JLabel("Server: " + targetUri);
-            uriLabel.setForeground(new Color(0, 100, 0)); // 深绿色
             JLabel projLabel = new JLabel("Project: " + targetProject);
-            projLabel.setForeground(new Color(0, 0, 150)); // 深蓝色
 
             infoPanel.add(uriLabel);
             infoPanel.add(projLabel);
