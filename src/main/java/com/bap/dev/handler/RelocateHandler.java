@@ -53,7 +53,9 @@ public class RelocateHandler {
         // --- 🔴 Step 0: 检查历史记录 ---
         List<BapSettingsState.RelocateProfile> history = BapSettingsState.getInstance().getRelocateHistory(modulePath);
         if (!history.isEmpty()) {
-            RelocateHistoryDialog historyDialog = new RelocateHistoryDialog(project, history);
+            // --- 🔴 修改：传入 modulePath ---
+            RelocateHistoryDialog historyDialog = new RelocateHistoryDialog(project, history, modulePath);
+            // -----------------------------
             if (historyDialog.showAndGet()) {
                 if (historyDialog.isNewConnectionRequested()) {
                     // 用户点了 "New Connection"，继续下面的标准流程

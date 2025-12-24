@@ -3,8 +3,7 @@ package com.bap.dev.ui;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
-import com.intellij.ui.ColoredListCellRenderer;
-import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.util.ui.FormBuilder;
 import org.jetbrains.annotations.NotNull;
@@ -21,13 +20,23 @@ public class RelocateHistoryDialog extends DialogWrapper {
     private BapSettingsState.RelocateProfile selectedProfile;
     private boolean isNewConnectionSelected = false;
 
-    public RelocateHistoryDialog(@Nullable Project project, List<BapSettingsState.RelocateProfile> history) {
+    // --- 🔴 新增字段 ---
+    private final String modulePath;
+    private final CollectionListModel<BapSettingsState.RelocateProfile> listModel;
+
+    // --- 🔴 修改构造函数：接收 modulePath ---
+    public RelocateHistoryDialog(@Nullable Project project, List<BapSettingsState.RelocateProfile> history, String modulePath) {
         super(project);
+        this.modulePath = modulePath;
         setTitle("Select Relocation Target");
 
-        historyList = new JBList<>(history);
+        // 使用 CollectionListModel 以便动态删除
+        this.listModel = new CollectionListModel<>(history);
+        historyList = new JBList<>(listModel);
         historyList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        historyList.setSelectedIndex(0);
+        if (!history.isEmpty()) {
+            historyList.setSelectedIndex(0);
+        }
 
         // 自定义渲染器：显示 "工程名 @ 服务器地址"
         historyList.setCellRenderer(new ColoredListCellRenderer<>() {
@@ -59,9 +68,24 @@ public class RelocateHistoryDialog extends DialogWrapper {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
+        // --- 🔴 修改：使用 ToolbarDecorator 增加删除按钮 ---
+        JPanel listPanel = ToolbarDecorator.createDecorator(historyList)
+                .setRemoveAction(button -> {
+                    BapSettingsState.RelocateProfile selected = historyList.getSelectedValue();
+                    if (selected != null) {
+                        // 1. 从持久化状态中删除
+                        BapSettingsState.getInstance().removeRelocateHistory(modulePath, selected);
+                        // 2. 从界面列表中删除
+                        ListUtil.removeSelectedItems(historyList);
+                    }
+                })
+                .disableAddAction()
+                .disableUpDownActions()
+                .createPanel();
+
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("Recent Locations:", new JScrollPane(historyList))
-                .addTooltip("Select a previous location to switch immediately, or verify via 'New Relocation'.")
+                .addLabeledComponent("Recent Locations:", listPanel)
+                .addTooltip("Select a previous location to switch immediately, or remove obsolete ones.")
                 .getPanel();
     }
 

@@ -135,4 +135,11 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public List<RelocateProfile> getRelocateHistory(String modulePath) {
         return moduleRelocateHistory.getOrDefault(modulePath, Collections.emptyList());
     }
+
+    public void removeRelocateHistory(String modulePath, RelocateProfile profile) {
+        List<RelocateProfile> list = moduleRelocateHistory.get(modulePath);
+        if (list != null) {
+            list.remove(profile);
+        }
+    }
 }
