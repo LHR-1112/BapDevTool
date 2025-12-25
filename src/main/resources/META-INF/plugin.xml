@@ -128,12 +128,19 @@
                     text="Relocate Project"
                     description="Change remote project mapping"
                     icon="AllIcons.Nodes.Project"/>
+            <separator/>
             <action id="com.bap.dev.action.OpenAdminToolAction"
                     class="com.bap.dev.action.OpenAdminToolAction"
                     text="Open Admin Tool"
                     description="Launch bap admin tool"
                     icon="AllIcons.General.Settings"/>
+            <action id="com.bap.dev.action.StartDebugAction"
+                    class="com.bap.dev.action.StartDebugAction"
+                    text="Start Debug"
+                    description="Run current class on cloud"
+                    icon="AllIcons.Actions.StartDebugger"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </group>
     </actions>
 </idea-plugin>
