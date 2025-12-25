@@ -65,7 +65,7 @@ public class LogonDialog extends DialogWrapper {
         if (profile != null) {
             // 只有当历史记录里有值时才覆盖
             userField.setText(profile.user);
-            pwdField.setText(profile.password);
+            pwdField.setText(profile.pwd);
         }
     }
 

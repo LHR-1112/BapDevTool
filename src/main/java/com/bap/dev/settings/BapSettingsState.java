@@ -50,12 +50,12 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public static class LoginProfile {
         public String uri = "";
         public String user = "";
-        public String password = "";
+        public String pwd = "";
         public LoginProfile() {}
-        public LoginProfile(String uri, String user, String password) {
+        public LoginProfile(String uri, String user, String pwd) {
             this.uri = uri;
             this.user = user;
-            this.password = password;
+            this.pwd = pwd;
         }
         @Override
         public boolean equals(Object o) {
