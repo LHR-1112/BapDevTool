@@ -5,6 +5,7 @@ import bap.java.CJavaFolderDto;
 import bap.java.CJavaProjectDto;
 import cn.hutool.core.util.StrUtil;
 import com.bap.dev.BapRpcClient;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.leavay.common.util.ProgressCtrl.ProgressControllerFEIntf;
 import com.leavay.common.util.ProgressCtrl.crpc.CProgressProxy;
 import com.leavay.common.util.ZipUtils;
@@ -17,6 +18,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -44,7 +46,7 @@ public class ProjectDownloader {
         }
     }
 
-    public void downloadProject(String projectUuid, String projectName, String targetDir, List<String> folders, Supplier<Boolean> checkCancel) throws Exception {
+    public void downloadProject(String projectUuid, String projectName, String targetDir, List<String> folders, ProgressIndicator indicator) throws Exception {
         File rootDir = new File(targetDir);
         String safeName = (projectName == null || projectName.trim().isEmpty()) ? projectUuid : projectName;
         File moduleFolder = new File(rootDir, safeName);
@@ -74,15 +76,53 @@ public class ProjectDownloader {
         String tempFileName = "checkout_temp.zip";
         File tmpZip = new File(moduleFolder, tempFileName);
 
+        // --- 🔴 新增：用于网速统计的状态变量 ---
+        // stats[0]=totalBytes, stats[1]=lastTime, stats[2]=lastBytes
+        final long[] stats = {0, System.currentTimeMillis(), 0};
+        final DecimalFormat df = new DecimalFormat("#.00");
+
         try {
             CRpcAdapter.setTempTimeout(24 * 60 * 60 * 1000);
+
+            // --- 🔴 修改：使用 indicator 检查取消 ---
+            if (indicator != null && indicator.isCanceled()) throw new RuntimeException("USER_CANCEL_DOWNLOAD");
 
             try (OutputStream outFile = Files.newOutputStream(tmpZip.toPath())) {
                 ProgressControllerFEIntf headlessDialogProxy = createHeadlessDialogProxy();
                 CProgressProxy<byte[]> srvProg = CProgressProxy.build(headlessDialogProxy, (data) -> {
-                    if (checkCancel != null && checkCancel.get()) throw new RuntimeException("USER_CANCEL_DOWNLOAD");
+                    // --- 🔴 修改：使用 indicator 检查取消 ---
+                    if (indicator != null && indicator.isCanceled()) throw new RuntimeException("USER_CANCEL_DOWNLOAD");
+
                     try {
-                        if (data != null && data.length > 0) outFile.write(data);
+                        if (data != null && data.length > 0) {
+                            outFile.write(data);
+
+                            // --- 🔴 新增：计算网速并更新 UI ---
+                            if (indicator != null) {
+                                int len = data.length;
+                                stats[0] += len;
+                                long now = System.currentTimeMillis();
+                                // 每 500ms 更新一次 UI，避免闪烁
+                                if (now - stats[1] > 500) {
+                                    long timeDiff = now - stats[1];
+                                    long bytesDiff = stats[0] - stats[2];
+
+                                    // 计算速度 (MB/s)
+                                    double speed = (bytesDiff / 1024.0 / 1024.0) / (timeDiff / 1000.0);
+                                    double totalMb = stats[0] / 1024.0 / 1024.0;
+
+                                    String speedStr = df.format(speed) + " MB/s";
+                                    String sizeStr = df.format(totalMb) + " MB";
+
+                                    // 更新提示信息
+                                    indicator.setText2("已下载: " + sizeStr + "  |  速度: " + speedStr);
+
+                                    stats[1] = now;
+                                    stats[2] = stats[0];
+                                }
+                            }
+                            // ------------------------------------
+                        }
                     } catch (Exception exp) { throw new RuntimeException(exp); }
                 });
 

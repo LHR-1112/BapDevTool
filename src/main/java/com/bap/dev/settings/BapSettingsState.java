@@ -71,15 +71,15 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public static class RelocateProfile {
         public String uri = "";
         public String user = "";
-        public String password = "";
+        public String pwd = "";
         public String projectUuid = "";
         public String projectName = "";
         public String adminTool = "";
         public RelocateProfile() {}
-        public RelocateProfile(String uri, String user, String password, String projectUuid, String projectName, String adminTool) {
+        public RelocateProfile(String uri, String user, String pwd, String projectUuid, String projectName, String adminTool) {
             this.uri = uri;
             this.user = user;
-            this.password = password;
+            this.pwd = pwd;
             this.projectUuid = projectUuid;
             this.projectName = projectName;
             this.adminTool = adminTool;

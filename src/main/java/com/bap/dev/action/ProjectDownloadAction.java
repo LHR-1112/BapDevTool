@@ -135,7 +135,7 @@ public class ProjectDownloadAction extends AnAction {
                     downloader.connect(uri, user, pwd);
 
                     indicator.setText("正在下载并创建模块...");
-                    downloader.downloadProject(uuid, projectName, currentProjectRoot, null, indicator::isCanceled);
+                    downloader.downloadProject(uuid, projectName, currentProjectRoot, null, indicator);
 
                     File newModuleDirIo = new File(currentProjectRoot, projectName);
 

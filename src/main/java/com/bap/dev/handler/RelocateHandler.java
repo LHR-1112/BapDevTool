@@ -67,7 +67,7 @@ public class RelocateHandler {
                             // 优先使用历史里的 AdminTool，如果没有则使用文件原本的
                             String toolToWrite = (profile.adminTool != null && !profile.adminTool.isEmpty()) ? profile.adminTool : finalAdminTool;
 
-                            saveNewConfig(confFile, profile.projectUuid, profile.uri, profile.user, profile.password, toolToWrite);
+                            saveNewConfig(confFile, profile.projectUuid, profile.uri, profile.user, profile.pwd, toolToWrite);
 
                             // 更新一下历史记录的顺序（置顶）
                             BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
