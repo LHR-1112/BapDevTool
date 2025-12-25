@@ -20,31 +20,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicInteger; // 引入 AtomicInteger
 
 public class ProjectDownloader {
 
-    // 使用抽象出来的客户端
     private final BapRpcClient client = new BapRpcClient();
 
     public void connect(String uri, String user, String pwd) throws Exception {
         client.connect(uri, user, pwd);
     }
 
-    public List<CJavaProjectDto> fetchProjectList(String uri, String user, String pwd) throws Exception {
-        try {
-            client.connect(uri, user, pwd);
-            List<CJavaProjectDto> projects = client.getService().getAllProjects();
-            if (projects == null) {
-                return Collections.emptyList();
-            }
-            return projects;
-        } finally {
-            // 注意：获取列表通常是短连接操作，获取完可以关闭
-            // 但如果是 downloadProject 流程，则由 Action 层控制 shutdown
-            client.shutdown();
-        }
-    }
+    public void shutdown() { client.shutdown(); }
 
     public void downloadProject(String projectUuid, String projectName, String targetDir, List<String> folders, ProgressIndicator indicator) throws Exception {
         File rootDir = new File(targetDir);
@@ -57,13 +43,11 @@ public class ProjectDownloader {
 
         System.out.println("Downloading Project [" + safeName + "] into [" + moduleFolder.getAbsolutePath() + "]");
 
-        // 1. 准备文件夹过滤
         Set<String> folderSet = new HashSet<>();
         if (folders != null && !folders.isEmpty()) {
             folderSet.addAll(folders);
         } else {
             try {
-                // 使用 client 获取服务
                 List<CJavaFolderDto> allFolders = client.getService().getFolders(projectUuid);
                 if (allFolders != null) {
                     for (CJavaFolderDto f : allFolders) folderSet.add(f.getName());
@@ -76,61 +60,83 @@ public class ProjectDownloader {
         String tempFileName = "checkout_temp.zip";
         File tmpZip = new File(moduleFolder, tempFileName);
 
-        // --- 🔴 新增：用于网速统计的状态变量 ---
-        // stats[0]=totalBytes, stats[1]=lastTime, stats[2]=lastBytes
+        // 统计状态：[0]=totalBytes, [1]=lastTime, [2]=lastBytes
         final long[] stats = {0, System.currentTimeMillis(), 0};
         final DecimalFormat df = new DecimalFormat("#.00");
+
+        // --- 用于接收服务端回传的进度百分比 (0-100) ---
+        AtomicInteger serverPercent = new AtomicInteger(0);
 
         try {
             CRpcAdapter.setTempTimeout(24 * 60 * 60 * 1000);
 
-            // --- 🔴 修改：使用 indicator 检查取消 ---
-            if (indicator != null && indicator.isCanceled()) throw new RuntimeException("USER_CANCEL_DOWNLOAD");
+            if (indicator != null && indicator.isCanceled()) {
+                throw new RuntimeException("USER_CANCEL_DOWNLOAD");
+            }
 
             try (OutputStream outFile = Files.newOutputStream(tmpZip.toPath())) {
-                ProgressControllerFEIntf headlessDialogProxy = createHeadlessDialogProxy();
+                // 传入 serverPercent 以便从代理中获取进度
+                ProgressControllerFEIntf headlessDialogProxy = createHeadlessDialogProxy(serverPercent);
+
                 CProgressProxy<byte[]> srvProg = CProgressProxy.build(headlessDialogProxy, (data) -> {
-                    // --- 🔴 修改：使用 indicator 检查取消 ---
                     if (indicator != null && indicator.isCanceled()) throw new RuntimeException("USER_CANCEL_DOWNLOAD");
 
                     try {
                         if (data != null && data.length > 0) {
                             outFile.write(data);
 
-                            // --- 🔴 新增：计算网速并更新 UI ---
                             if (indicator != null) {
                                 int len = data.length;
-                                stats[0] += len;
+                                stats[0] += len; // 当前已下载字节数
                                 long now = System.currentTimeMillis();
-                                // 每 500ms 更新一次 UI，避免闪烁
+
+                                // 每 500ms 更新一次 UI
                                 if (now - stats[1] > 500) {
                                     long timeDiff = now - stats[1];
                                     long bytesDiff = stats[0] - stats[2];
 
-                                    // 计算速度 (MB/s)
+                                    // 1. 计算网速
                                     double speed = (bytesDiff / 1024.0 / 1024.0) / (timeDiff / 1000.0);
-                                    double totalMb = stats[0] / 1024.0 / 1024.0;
-
                                     String speedStr = df.format(speed) + " MB/s";
-                                    String sizeStr = df.format(totalMb) + " MB";
 
-                                    // 更新提示信息
-                                    indicator.setText2("已下载: " + sizeStr + "  |  速度: " + speedStr);
+                                    // 2. 计算当前已下载量
+                                    double currentMb = stats[0] / 1024.0 / 1024.0;
+                                    String currentStr = df.format(currentMb) + " MB";
+
+                                    // 3. --- 🔴 核心修改：仅显示进度百分比，不显示总大小 ---
+                                    int pct = serverPercent.get();
+
+                                    if (pct > 0) {
+                                        // 设置确定性进度条
+                                        indicator.setIndeterminate(false);
+                                        indicator.setFraction(pct / 100.0);
+
+                                        // 显示格式：已下载: 10.5 MB (50%)  |  速度: 2.0 MB/s
+                                        indicator.setText2("已下载: " + currentStr + " (" + pct + "%)  |  速度: " + speedStr);
+                                    } else {
+                                        // 还没收到进度
+                                        indicator.setIndeterminate(true);
+                                        indicator.setText2("已下载: " + currentStr + "  |  速度: " + speedStr);
+                                    }
 
                                     stats[1] = now;
                                     stats[2] = stats[0];
                                 }
                             }
-                            // ------------------------------------
                         }
                     } catch (Exception exp) { throw new RuntimeException(exp); }
                 });
 
-                // 使用 client 获取服务进行下载
                 client.getService().streamExportProject(srvProg, projectUuid, folderSet, null);
             }
 
             System.out.println("Unzipping to: " + moduleFolder.getAbsolutePath());
+            if (indicator != null) {
+                indicator.setIndeterminate(true);
+                indicator.setText("正在解压文件...");
+                indicator.setText2("");
+            }
+
             ZipUtils.unzip(tmpZip.getAbsolutePath(), moduleFolder.getAbsolutePath());
 
             generateConfigFile(moduleFolder, projectUuid);
@@ -144,49 +150,22 @@ public class ProjectDownloader {
         }
     }
 
-    public void shutdown() {
-        client.shutdown();
-    }
-
+    // ... (generateConfigFile, generateLaunchFile, isCancelException 保持不变) ...
     private void generateConfigFile(File dstFolder, String projectUuid) throws Exception {
         String adminTool = CJavaConst.DFT_DEV_ADMIN_TOOL;
-        try {
-            // 使用 client 获取服务
-            adminTool = client.getService().getDevAdminTool();
-        } catch (Throwable err) {
-            System.err.println("Warning: Failed to get AdminTool config, using default.");
-        }
-
-        if (adminTool == null || adminTool.isEmpty()) {
-            adminTool = "bap.client.BapMainFrame";
-        }
-
-        // 从 client 获取连接信息
+        try { adminTool = client.getService().getDevAdminTool(); } catch (Throwable err) {}
+        if (adminTool == null || adminTool.isEmpty()) adminTool = "bap.client.BapMainFrame";
         String uri = (client.getUri() == null) ? "" : client.getUri();
         String user = (client.getUser() == null) ? "" : client.getUser();
         String pwd = (client.getPwd() == null) ? "" : client.getPwd();
-
-        String xmlContent = String.format(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                        "\n" +
-                        "<Development Project=\"%s\" Uri=\"%s\" AdminTool=\"%s\" User=\"%s\" Password=\"%s\" LocalNioPort=\"-1\"/>",
-                projectUuid,
-                uri,
-                adminTool,
-                user,
-                pwd
-        );
-
+        String xmlContent = String.format("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\n<Development Project=\"%s\" Uri=\"%s\" AdminTool=\"%s\" User=\"%s\" Password=\"%s\" LocalNioPort=\"-1\"/>", projectUuid, uri, adminTool, user, pwd);
         File confFile = new File(dstFolder, CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-        try (FileOutputStream fos = new FileOutputStream(confFile)) {
-            fos.write(xmlContent.getBytes(StandardCharsets.UTF_8));
-        }
+        try (FileOutputStream fos = new FileOutputStream(confFile)) { fos.write(xmlContent.getBytes(StandardCharsets.UTF_8)); }
     }
 
     private void generateLaunchFile(File dstFolder) throws Exception {
         String templatePath = CJavaConst.PROJECT_LAUNCH_TEMPLATE;
         templatePath = templatePath.substring(1);
-
         String content = "";
         try {
             InputStream in = this.getClass().getClassLoader().getResourceAsStream(templatePath);
@@ -196,21 +175,11 @@ public class ProjectDownloader {
                 content = new String(bytes, StandardCharsets.UTF_8);
                 in.close();
             }
-        } catch (Exception e) {
-            // ignore
-        }
-
-        if (StrUtil.isEmpty(content)) {
-            content = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<launchConfiguration type=\"org.eclipse.jdt.launching.localJavaApplication\">\n</launchConfiguration>";
-        }
-
+        } catch (Exception e) {}
+        if (StrUtil.isEmpty(content)) content = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<launchConfiguration type=\"org.eclipse.jdt.launching.localJavaApplication\">\n</launchConfiguration>";
         File launchFile = new File(dstFolder, CJavaConst.PROJECT_LAUNCH_FILE);
-        try (FileOutputStream fos = new FileOutputStream(launchFile)) {
-            fos.write(content.getBytes(StandardCharsets.UTF_8));
-        }
+        try (FileOutputStream fos = new FileOutputStream(launchFile)) { fos.write(content.getBytes(StandardCharsets.UTF_8)); }
     }
-
-    // ... isCancelException 和 createHeadlessDialogProxy 保持不变 ...
 
     private boolean isCancelException(Throwable t) {
         while (t != null) {
@@ -220,13 +189,25 @@ public class ProjectDownloader {
         return false;
     }
 
-    private ProgressControllerFEIntf createHeadlessDialogProxy() throws Exception {
+    // --- 拦截 sendProcess 获取进度 ---
+    private ProgressControllerFEIntf createHeadlessDialogProxy(AtomicInteger serverPercentRef) throws Exception {
         Class<?> interfaceClass = Class.forName("com.leavay.common.util.ProgressCtrl.ProgressControllerFEIntf");
         return (ProgressControllerFEIntf) Proxy.newProxyInstance(
                 this.getClass().getClassLoader(),
                 new Class<?>[]{interfaceClass},
                 (proxy, method, args) -> {
                     String name = method.getName();
+
+                    // --- 拦截 sendProcess(int percent, String msg, boolean ...) ---
+                    if ("sendProcess".equals(name) && args != null && args.length > 0) {
+                        Object arg0 = args[0];
+                        if (arg0 instanceof Number) {
+                            // 直接使用这个值作为进度百分比
+                            serverPercentRef.set(((Number) arg0).intValue());
+                        }
+                        return null;
+                    }
+
                     switch (name) {
                         case "getMaximum": return 100;
                         case "getMinimum": return 0;

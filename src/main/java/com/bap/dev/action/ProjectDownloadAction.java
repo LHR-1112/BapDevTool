@@ -30,6 +30,7 @@ import com.intellij.openapi.roots.*;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.JarFileSystem;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -122,11 +123,17 @@ public class ProjectDownloadAction extends AnAction {
     }
 
     /**
-     * 执行下载任务（复用之前的逻辑）
+     * 执行下载任务（带自动清理功能）
+     */
+    /**
+     * 执行下载任务（带自动清理功能）
      */
     private void startDownloadTask(Project project, String uri, String user, String pwd, String uuid, String projectName, String currentProjectRoot) {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "正在下载模块 " + projectName + "...", true) {
             private final ProjectDownloader downloader = new ProjectDownloader();
+            // --- 🔴 新增：状态标记与目标路径 ---
+            private boolean isSuccess = false;
+            private final File moduleDir = new File(currentProjectRoot, projectName);
 
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
@@ -135,32 +142,66 @@ public class ProjectDownloadAction extends AnAction {
                     downloader.connect(uri, user, pwd);
 
                     indicator.setText("正在下载并创建模块...");
+                    // 传入 indicator 以支持取消和网速显示
                     downloader.downloadProject(uuid, projectName, currentProjectRoot, null, indicator);
 
-                    File newModuleDirIo = new File(currentProjectRoot, projectName);
+                    // --- 🔴 关键点：只有代码运行到这里，才算下载成功 ---
+                    isSuccess = true;
 
                     // 移出 UI 线程的 IO 操作
-                    VirtualFile newModuleDirVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(newModuleDirIo);
+                    VirtualFile newModuleDirVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(moduleDir);
 
                     ApplicationManager.getApplication().invokeLater(() -> {
                         if (newModuleDirVFile == null) {
                             sendNotification(project, "刷新失败", "无法找到新下载的目录", NotificationType.ERROR);
                             return;
                         }
-
-                        // 异步递归刷新
+                        // 异步递归刷新并配置
                         newModuleDirVFile.refresh(true, true, () -> {
-                            configureModuleStructure(project, newModuleDirVFile, newModuleDirIo, projectName);
+                            configureModuleStructure(project, newModuleDirVFile, moduleDir, projectName);
                         });
                     });
 
-                } catch (InterruptedException cancelEx) {
-                    ApplicationManager.getApplication().invokeLater(() -> sendNotification(project, "下载已取消", "", NotificationType.INFORMATION));
+                } catch (InterruptedException | RuntimeException cancelEx) {
+                    // 捕获取消异常 (我们在 Downloader 里抛出的是 RuntimeException("USER_CANCEL_DOWNLOAD"))
+                    String msg = cancelEx.getMessage();
+                    if ("USER_CANCEL_DOWNLOAD".equals(msg) || cancelEx instanceof InterruptedException) {
+                        ApplicationManager.getApplication().invokeLater(() ->
+                                sendNotification(project, "下载已取消", "正在清理临时文件...", NotificationType.INFORMATION));
+                    } else {
+                        // 其他运行时异常
+                        cancelEx.printStackTrace();
+                        ApplicationManager.getApplication().invokeLater(() ->
+                                Messages.showErrorDialog("下载出错: " + msg, "错误"));
+                    }
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog("下载出错: " + ex.getMessage(), "错误"));
+                    ApplicationManager.getApplication().invokeLater(() ->
+                            Messages.showErrorDialog("下载出错: " + ex.getMessage(), "错误"));
                 } finally {
                     downloader.shutdown();
+
+                    // --- 🔴 新增：失败/取消时的自动清理逻辑 ---
+                    if (!isSuccess) {
+                        cleanupFailedDownload(indicator);
+                    }
+                }
+            }
+
+            // 清理残留目录
+            private void cleanupFailedDownload(ProgressIndicator indicator) {
+                if (moduleDir.exists()) {
+                    try {
+                        indicator.setText("正在清理残余文件...");
+                        // FileUtil.delete 能够递归删除非空目录
+                        FileUtil.delete(moduleDir);
+
+                        // 可选：通知用户已清理
+                        // ApplicationManager.getApplication().invokeLater(() ->
+                        //    sendNotification(project, "清理完成", "已删除未完成的目录: " + projectName, NotificationType.INFORMATION));
+                    } catch (Exception e) {
+                        System.err.println("Failed to clean up directory: " + moduleDir.getAbsolutePath());
+                    }
                 }
             }
 
@@ -168,9 +209,13 @@ public class ProjectDownloadAction extends AnAction {
             public void onCancel() {
                 super.onCancel();
                 downloader.shutdown();
+                // 注意：onCancel 是在 UI 线程调用的，
+                // 实际的清理逻辑主要依靠 run() 方法中的 finally 块来保证执行
             }
         });
     }
+
+
 
     private void configureModuleStructure(Project project, VirtualFile newModuleDirVFile, File newModuleDirIo, String projectName) {
         try {
