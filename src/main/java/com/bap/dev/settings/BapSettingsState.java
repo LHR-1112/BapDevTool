@@ -84,6 +84,7 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
             this.projectName = projectName;
             this.adminTool = adminTool;
         }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
