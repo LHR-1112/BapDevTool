@@ -281,7 +281,8 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
 
                     Module finalModule = newModule;
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        if (!project.isDisposed()) createRunConfiguration(project, finalModule, projectName, newModuleDirIo.getAbsolutePath());
+                        if (!project.isDisposed())
+                            createRunConfiguration(project, finalModule, projectName, newModuleDirIo.getAbsolutePath());
                     });
                     sendNotification(project, "下载并配置成功", "模块 <b>" + projectName + "</b> 已就绪。", NotificationType.INFORMATION);
                 } catch (Exception e) {
@@ -307,6 +308,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
         runManager.addConfiguration(settings);
         runManager.setSelectedConfiguration(settings);
     }
+
     private void addSourceFolderIfExist(ContentEntry entry, VirtualFile root, String relativePath, boolean isResource) {
         VirtualFile dir = root.findFileByRelativePath(relativePath);
         if (dir != null && dir.exists()) {
@@ -314,10 +316,12 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
             else entry.addSourceFolder(dir, JavaSourceRootType.SOURCE);
         }
     }
+
     private void addExcludeFolderIfExist(ContentEntry entry, VirtualFile root, String relativePath) {
         VirtualFile dir = root.findFileByRelativePath(relativePath);
         if (dir != null && dir.exists()) entry.addExcludeFolder(dir);
     }
+
     private void addFolderJarsToLibrary(ModifiableRootModel model, VirtualFile root, String relativePath) {
         VirtualFile libDir = root.findFileByRelativePath(relativePath);
         if (libDir == null || !libDir.exists()) return;
@@ -335,6 +339,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
         }
         libModel.commit();
     }
+
     private void sendNotification(Project project, String title, String content, NotificationType type) {
         Notification notification = new Notification(NOTIFICATION_GROUP_ID, title, content, type);
         Notifications.Bus.notify(notification, project);

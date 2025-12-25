@@ -30,7 +30,9 @@ public class ProjectDownloader {
         client.connect(uri, user, pwd);
     }
 
-    public void shutdown() { client.shutdown(); }
+    public void shutdown() {
+        client.shutdown();
+    }
 
     public void downloadProject(String projectUuid, String projectName, String targetDir, List<String> folders, ProgressIndicator indicator) throws Exception {
         File rootDir = new File(targetDir);
@@ -124,7 +126,9 @@ public class ProjectDownloader {
                                 }
                             }
                         }
-                    } catch (Exception exp) { throw new RuntimeException(exp); }
+                    } catch (Exception exp) {
+                        throw new RuntimeException(exp);
+                    }
                 });
 
                 client.getService().streamExportProject(srvProg, projectUuid, folderSet, null);
@@ -153,14 +157,19 @@ public class ProjectDownloader {
     // ... (generateConfigFile, generateLaunchFile, isCancelException 保持不变) ...
     private void generateConfigFile(File dstFolder, String projectUuid) throws Exception {
         String adminTool = CJavaConst.DFT_DEV_ADMIN_TOOL;
-        try { adminTool = client.getService().getDevAdminTool(); } catch (Throwable err) {}
+        try {
+            adminTool = client.getService().getDevAdminTool();
+        } catch (Throwable err) {
+        }
         if (adminTool == null || adminTool.isEmpty()) adminTool = "bap.client.BapMainFrame";
         String uri = (client.getUri() == null) ? "" : client.getUri();
         String user = (client.getUser() == null) ? "" : client.getUser();
         String pwd = (client.getPwd() == null) ? "" : client.getPwd();
         String xmlContent = String.format("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\n<Development Project=\"%s\" Uri=\"%s\" AdminTool=\"%s\" User=\"%s\" Password=\"%s\" LocalNioPort=\"-1\"/>", projectUuid, uri, adminTool, user, pwd);
         File confFile = new File(dstFolder, CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-        try (FileOutputStream fos = new FileOutputStream(confFile)) { fos.write(xmlContent.getBytes(StandardCharsets.UTF_8)); }
+        try (FileOutputStream fos = new FileOutputStream(confFile)) {
+            fos.write(xmlContent.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     private void generateLaunchFile(File dstFolder) throws Exception {
@@ -175,10 +184,14 @@ public class ProjectDownloader {
                 content = new String(bytes, StandardCharsets.UTF_8);
                 in.close();
             }
-        } catch (Exception e) {}
-        if (StrUtil.isEmpty(content)) content = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<launchConfiguration type=\"org.eclipse.jdt.launching.localJavaApplication\">\n</launchConfiguration>";
+        } catch (Exception e) {
+        }
+        if (StrUtil.isEmpty(content))
+            content = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<launchConfiguration type=\"org.eclipse.jdt.launching.localJavaApplication\">\n</launchConfiguration>";
         File launchFile = new File(dstFolder, CJavaConst.PROJECT_LAUNCH_FILE);
-        try (FileOutputStream fos = new FileOutputStream(launchFile)) { fos.write(content.getBytes(StandardCharsets.UTF_8)); }
+        try (FileOutputStream fos = new FileOutputStream(launchFile)) {
+            fos.write(content.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     private boolean isCancelException(Throwable t) {
@@ -209,9 +222,13 @@ public class ProjectDownloader {
                     }
 
                     switch (name) {
-                        case "getMaximum": return 100;
-                        case "getMinimum": return 0;
-                        case "isCanceled": case "isTerminated": return false;
+                        case "getMaximum":
+                            return 100;
+                        case "getMinimum":
+                            return 0;
+                        case "isCanceled":
+                        case "isTerminated":
+                            return false;
                     }
                     Class<?> returnType = method.getReturnType();
                     if (returnType == int.class) return 0;
