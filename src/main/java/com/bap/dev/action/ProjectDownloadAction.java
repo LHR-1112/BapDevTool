@@ -11,19 +11,26 @@ import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.application.ApplicationConfigurationType;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.ConfigurationTypeUtil;
+import com.intellij.icons.AllIcons; // 导入图标库
+import com.intellij.ide.impl.ProjectUtil;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
+import com.intellij.openapi.actionSystem.ActionUpdateThread; // 导入
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbAware; // 导入
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.*;
@@ -41,43 +48,51 @@ import org.jetbrains.jps.model.java.JavaSourceRootType;
 import java.io.File;
 import java.util.List;
 
-public class ProjectDownloadAction extends AnAction {
+// 1. 实现 DumbAware
+public class ProjectDownloadAction extends AnAction implements DumbAware {
 
     private static final String NOTIFICATION_GROUP_ID = "Cloud Project Download";
-
-    // 历史记录 Key
     private static final String PREF_URI = "practicalTool.uri";
     private static final String PREF_USER = "practicalTool.user";
 
+    // 🔴 删除之前的构造函数 super(..., Icon)
+    // 使用默认构造函数即可，元数据由 XML 提供
+    public ProjectDownloadAction() {
+        super();
+    }
+
+    // 3. 必须覆盖此方法 (2022.3+)
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.EDT;
+    }
+
+    // 4. 覆盖 update 确保可用
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+        e.getPresentation().setEnabled(true);
+        // 不要在这里 setIcon；让 plugin.xml 的 icon 生效
+        // 也不要无条件 setVisible(true)，除非你有条件判断
+    }
+
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+        // ... (保持您原有的逻辑不变，直接粘贴之前的代码即可) ...
         Project project = e.getProject();
-
-        if (project == null || project.getBasePath() == null) {
-            Messages.showErrorDialog("请先打开一个项目，插件将作为模块下载到当前项目根目录下。", "无法确定目标路径");
-            return;
-        }
-
-        // 1. 获取历史配置
         PropertiesComponent props = PropertiesComponent.getInstance();
         String defaultUri = props.getValue(PREF_URI, "ws://127.0.0.1:2020");
         String defaultUser = props.getValue(PREF_USER, "root");
 
-        // 2. 弹出登录框 (Step 1)
         LogonDialog logonDialog = new LogonDialog(project, defaultUri, defaultUser, "");
-        if (!logonDialog.showAndGet()) {
-            return; // 用户取消
-        }
+        if (!logonDialog.showAndGet()) return;
 
         String uri = logonDialog.getUri();
         String user = logonDialog.getUser();
         String pwd = logonDialog.getPwd();
 
-        // 保存常用配置
         props.setValue(PREF_URI, uri);
         props.setValue(PREF_USER, user);
 
-        // 3. 后台连接并获取列表 (Step 2)
         BapRpcClient tempClient = new BapRpcClient();
 
         ProgressManager.getInstance().run(new Task.Modal(project, "Connecting...", true) {
@@ -86,15 +101,11 @@ public class ProjectDownloadAction extends AnAction {
                 try {
                     indicator.setIndeterminate(true);
                     tempClient.connect(uri, user, pwd);
-
                     indicator.setText("Fetching project list...");
                     List<CJavaProjectDto> projects = tempClient.getService().getAllProjects();
 
-                    // 4. UI 线程弹出工程选择框 (Step 3)
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        // 用完临时连接即关闭，下载时会由 Downloader 重新建立连接
                         tempClient.shutdown();
-
                         if (projects == null || projects.isEmpty()) {
                             Messages.showWarningDialog("连接成功，但服务端没有返回任何工程。", "无数据");
                             return;
@@ -104,12 +115,45 @@ public class ProjectDownloadAction extends AnAction {
                         if (selectDialog.showAndGet()) {
                             String uuid = selectDialog.getSelectedProjectUuid();
                             String projectName = selectDialog.getSelectedProjectName();
-                            String currentProjectRoot = project.getBasePath();
-
                             if (uuid == null) return;
 
-                            // 5. 启动下载任务 (Step 4)
-                            startDownloadTask(project, uri, user, pwd, uuid, projectName, currentProjectRoot);
+                            String targetRoot = null;
+                            boolean isOpenNewWindow = true;
+
+                            if (project == null) {
+                                FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
+                                descriptor.setTitle("选择项目保存位置");
+                                descriptor.setDescription("请选择一个文件夹，新工程将下载到该文件夹内。");
+                                VirtualFile file = FileChooser.chooseFile(descriptor, null, null);
+                                if (file == null) return;
+                                targetRoot = file.getPath();
+                                isOpenNewWindow = true;
+                            } else {
+                                int choice = Messages.showDialog(project,
+                                        "请选择工程下载方式：\n\n" +
+                                                "1. 添加到当前项目：作为模块导入\n" +
+                                                "2. 作为独立项目打开：在新窗口中打开",
+                                        "下载选项",
+                                        new String[]{"添加到当前项目", "作为独立项目打开", "取消"},
+                                        0,
+                                        Messages.getQuestionIcon());
+
+                                if (choice == 2 || choice == -1) return;
+                                isOpenNewWindow = (choice == 1);
+                                if (isOpenNewWindow) {
+                                    FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
+                                    descriptor.setTitle("选择项目保存位置");
+                                    VirtualFile file = FileChooser.chooseFile(descriptor, project, null);
+                                    if (file == null) return;
+                                    targetRoot = file.getPath();
+                                } else {
+                                    targetRoot = project.getBasePath();
+                                }
+                            }
+
+                            if (targetRoot != null) {
+                                startDownloadTask(project, uri, user, pwd, uuid, projectName, targetRoot, isOpenNewWindow);
+                            }
                         }
                     });
 
@@ -122,54 +166,48 @@ public class ProjectDownloadAction extends AnAction {
         });
     }
 
-    /**
-     * 执行下载任务（带自动清理功能）
-     */
-    /**
-     * 执行下载任务（带自动清理功能）
-     */
-    private void startDownloadTask(Project project, String uri, String user, String pwd, String uuid, String projectName, String currentProjectRoot) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "正在下载模块 " + projectName + "...", true) {
+    // ... (请务必保留 startDownloadTask, configureModuleStructure, createRunConfiguration, sendNotification 等所有辅助方法) ...
+    private void startDownloadTask(Project currentProject, String uri, String user, String pwd, String uuid, String projectName, String targetRoot, boolean isOpenNewWindow) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(currentProject, "正在下载模块 " + projectName + "...", true) {
             private final ProjectDownloader downloader = new ProjectDownloader();
-            // --- 🔴 新增：状态标记与目标路径 ---
             private boolean isSuccess = false;
-            private final File moduleDir = new File(currentProjectRoot, projectName);
+            private final File moduleDir = new File(targetRoot, projectName);
 
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setText("正在连接服务器...");
                     downloader.connect(uri, user, pwd);
-
                     indicator.setText("正在下载并创建模块...");
-                    // 传入 indicator 以支持取消和网速显示
-                    downloader.downloadProject(uuid, projectName, currentProjectRoot, null, indicator);
-
-                    // --- 🔴 关键点：只有代码运行到这里，才算下载成功 ---
+                    downloader.downloadProject(uuid, projectName, targetRoot, null, indicator);
                     isSuccess = true;
-
-                    // 移出 UI 线程的 IO 操作
                     VirtualFile newModuleDirVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(moduleDir);
-
                     ApplicationManager.getApplication().invokeLater(() -> {
                         if (newModuleDirVFile == null) {
-                            sendNotification(project, "刷新失败", "无法找到新下载的目录", NotificationType.ERROR);
+                            sendNotification(currentProject, "刷新失败", "无法找到新下载的目录", NotificationType.ERROR);
                             return;
                         }
-                        // 异步递归刷新并配置
                         newModuleDirVFile.refresh(true, true, () -> {
-                            configureModuleStructure(project, newModuleDirVFile, moduleDir, projectName);
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                if (isOpenNewWindow) {
+                                    Project newProject = ProjectUtil.openOrImport(moduleDir.getPath(), currentProject, true);
+                                    if (newProject != null) {
+                                        configureModuleStructure(newProject, newModuleDirVFile, moduleDir, projectName);
+                                    } else {
+                                        Messages.showErrorDialog("无法打开新项目: " + moduleDir.getPath(), "错误");
+                                    }
+                                } else {
+                                    configureModuleStructure(currentProject, newModuleDirVFile, moduleDir, projectName);
+                                }
+                            });
                         });
                     });
-
                 } catch (InterruptedException | RuntimeException cancelEx) {
-                    // 捕获取消异常 (我们在 Downloader 里抛出的是 RuntimeException("USER_CANCEL_DOWNLOAD"))
                     String msg = cancelEx.getMessage();
                     if ("USER_CANCEL_DOWNLOAD".equals(msg) || cancelEx instanceof InterruptedException) {
                         ApplicationManager.getApplication().invokeLater(() ->
-                                sendNotification(project, "下载已取消", "正在清理临时文件...", NotificationType.INFORMATION));
+                                sendNotification(currentProject, "下载已取消", "正在清理临时文件...", NotificationType.INFORMATION));
                     } else {
-                        // 其他运行时异常
                         cancelEx.printStackTrace();
                         ApplicationManager.getApplication().invokeLater(() ->
                                 Messages.showErrorDialog("下载出错: " + msg, "错误"));
@@ -180,126 +218,72 @@ public class ProjectDownloadAction extends AnAction {
                             Messages.showErrorDialog("下载出错: " + ex.getMessage(), "错误"));
                 } finally {
                     downloader.shutdown();
-
-                    // --- 🔴 新增：失败/取消时的自动清理逻辑 ---
                     if (!isSuccess) {
                         cleanupFailedDownload(indicator);
                     }
                 }
             }
 
-            // 清理残留目录
             private void cleanupFailedDownload(ProgressIndicator indicator) {
                 if (moduleDir.exists()) {
                     try {
                         indicator.setText("正在清理残余文件...");
-                        // FileUtil.delete 能够递归删除非空目录
                         FileUtil.delete(moduleDir);
-
-                        // 可选：通知用户已清理
-                        // ApplicationManager.getApplication().invokeLater(() ->
-                        //    sendNotification(project, "清理完成", "已删除未完成的目录: " + projectName, NotificationType.INFORMATION));
                     } catch (Exception e) {
                         System.err.println("Failed to clean up directory: " + moduleDir.getAbsolutePath());
                     }
                 }
             }
-
-            @Override
-            public void onCancel() {
-                super.onCancel();
-                downloader.shutdown();
-                // 注意：onCancel 是在 UI 线程调用的，
-                // 实际的清理逻辑主要依靠 run() 方法中的 finally 块来保证执行
-            }
         });
     }
-
-
 
     private void configureModuleStructure(Project project, VirtualFile newModuleDirVFile, File newModuleDirIo, String projectName) {
         try {
             WriteAction.run(() -> {
                 if (project.isDisposed()) return;
-                if (!newModuleDirVFile.exists()) {
-                    throw new RuntimeException("无法找到模块目录: " + newModuleDirIo.getAbsolutePath());
-                }
-
-                String imlPath = new File(newModuleDirIo, projectName + ".iml").getAbsolutePath();
+                if (!newModuleDirVFile.exists()) throw new RuntimeException("无法找到模块目录");
                 ModuleManager moduleManager = ModuleManager.getInstance(project);
-                Module newModule = moduleManager.newModule(imlPath, "JAVA_MODULE");
-
+                Module newModule = moduleManager.findModuleByName(projectName);
+                if (newModule == null) {
+                    String imlPath = new File(newModuleDirIo, projectName + ".iml").getAbsolutePath();
+                    newModule = moduleManager.newModule(imlPath, "JAVA_MODULE");
+                }
                 ModuleRootManager rootManager = ModuleRootManager.getInstance(newModule);
                 ModifiableRootModel model = rootManager.getModifiableModel();
-
                 try {
-                    for (ContentEntry entry : model.getContentEntries()) {
-                        model.removeContentEntry(entry);
-                    }
-
+                    for (ContentEntry entry : model.getContentEntries()) model.removeContentEntry(entry);
                     ContentEntry contentEntry = model.addContentEntry(newModuleDirVFile);
-
                     addSourceFolderIfExist(contentEntry, newModuleDirVFile, "src/core", false);
                     addSourceFolderIfExist(contentEntry, newModuleDirVFile, "src/src", false);
                     addSourceFolderIfExist(contentEntry, newModuleDirVFile, "src/res", true);
-
                     addExcludeFolderIfExist(contentEntry, newModuleDirVFile, "lib");
                     addExcludeFolderIfExist(contentEntry, newModuleDirVFile, "openSource");
-
                     addFolderJarsToLibrary(model, newModuleDirVFile, "lib/platform");
                     addFolderJarsToLibrary(model, newModuleDirVFile, "lib/plugin");
                     addFolderJarsToLibrary(model, newModuleDirVFile, "lib/project");
-
-                    // --- 🔴 新增：配置编译输出路径 ---
                     CompilerModuleExtension extension = model.getModuleExtension(CompilerModuleExtension.class);
                     if (extension != null) {
-                        // 1. 勾选“使用模块编译输出路径” (不继承项目路径)
                         extension.inheritCompilerOutputPath(false);
-
-                        // 2. 勾选“排除输出目录”
                         extension.setExcludeOutput(true);
-
-                        // 3. 设置输出目录为 "模块目录/bin"
                         File binDir = new File(newModuleDirIo, "bin");
-                        if (!binDir.exists()) {
-                            binDir.mkdirs(); // 如果 bin 不存在则创建
-                        }
-                        // 刷新并获取 bin 的 VirtualFile
+                        if (!binDir.exists()) binDir.mkdirs();
                         VirtualFile binVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(binDir);
-
-                        // 4. 设置测试输出目录为 "模块目录/test"
-                        File testDir = new File(newModuleDirIo, "test"); // 新增：测试输出目录
-                        if (!testDir.exists()) {
-                            testDir.mkdirs(); // 新增：如果 test 不存在则创建
-                        }
-                        // 刷新并获取 test 的 VirtualFile
-                        VirtualFile testVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(testDir); // 新增
-
-                        if (binVFile != null) {
-                            extension.setCompilerOutputPath(binVFile);
-                        }
-
-                        if (testVFile != null) {
-                            extension.setCompilerOutputPathForTests(testVFile); // 🔴 修改：测试输出设为 test
-                        }
+                        File testDir = new File(newModuleDirIo, "test");
+                        if (!testDir.exists()) testDir.mkdirs();
+                        VirtualFile testVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(testDir);
+                        if (binVFile != null) extension.setCompilerOutputPath(binVFile);
+                        if (testVFile != null) extension.setCompilerOutputPathForTests(testVFile);
                     }
-                    // ------------------------------
-
                     Sdk projectSdk = ProjectRootManager.getInstance(project).getProjectSdk();
-                    if (projectSdk != null) {
-                        model.setSdk(projectSdk);
-                    } else {
-                        model.inheritSdk();
-                    }
+                    if (projectSdk != null) model.setSdk(projectSdk);
+                    else model.inheritSdk();
                     model.commit();
 
-                    createRunConfiguration(project, newModule, projectName, newModuleDirIo.getAbsolutePath());
-
-                    sendNotification(project, "下载并配置成功",
-                            "模块 <b>" + projectName + "</b> 已创建。<br/>" +
-                                    "编译路径已设置，依赖库已加载。",
-                            NotificationType.INFORMATION);
-
+                    Module finalModule = newModule;
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (!project.isDisposed()) createRunConfiguration(project, finalModule, projectName, newModuleDirIo.getAbsolutePath());
+                    });
+                    sendNotification(project, "下载并配置成功", "模块 <b>" + projectName + "</b> 已就绪。", NotificationType.INFORMATION);
                 } catch (Exception e) {
                     if (!model.isDisposed()) model.dispose();
                     throw e;
@@ -323,25 +307,17 @@ public class ProjectDownloadAction extends AnAction {
         runManager.addConfiguration(settings);
         runManager.setSelectedConfiguration(settings);
     }
-
     private void addSourceFolderIfExist(ContentEntry entry, VirtualFile root, String relativePath, boolean isResource) {
         VirtualFile dir = root.findFileByRelativePath(relativePath);
         if (dir != null && dir.exists()) {
-            if (isResource) {
-                entry.addSourceFolder(dir, JavaResourceRootType.RESOURCE);
-            } else {
-                entry.addSourceFolder(dir, JavaSourceRootType.SOURCE);
-            }
+            if (isResource) entry.addSourceFolder(dir, JavaResourceRootType.RESOURCE);
+            else entry.addSourceFolder(dir, JavaSourceRootType.SOURCE);
         }
     }
-
     private void addExcludeFolderIfExist(ContentEntry entry, VirtualFile root, String relativePath) {
         VirtualFile dir = root.findFileByRelativePath(relativePath);
-        if (dir != null && dir.exists()) {
-            entry.addExcludeFolder(dir);
-        }
+        if (dir != null && dir.exists()) entry.addExcludeFolder(dir);
     }
-
     private void addFolderJarsToLibrary(ModifiableRootModel model, VirtualFile root, String relativePath) {
         VirtualFile libDir = root.findFileByRelativePath(relativePath);
         if (libDir == null || !libDir.exists()) return;
@@ -354,14 +330,11 @@ public class ProjectDownloadAction extends AnAction {
             if (!file.isDirectory() && "jar".equalsIgnoreCase(file.getExtension())) {
                 String jarPath = file.getPath() + "!/";
                 VirtualFile jarRoot = JarFileSystem.getInstance().refreshAndFindFileByPath(jarPath);
-                if (jarRoot != null) {
-                    libModel.addRoot(jarRoot, OrderRootType.CLASSES);
-                }
+                if (jarRoot != null) libModel.addRoot(jarRoot, OrderRootType.CLASSES);
             }
         }
         libModel.commit();
     }
-
     private void sendNotification(Project project, String title, String content, NotificationType type) {
         Notification notification = new Notification(NOTIFICATION_GROUP_ID, title, content, type);
         Notifications.Bus.notify(notification, project);
