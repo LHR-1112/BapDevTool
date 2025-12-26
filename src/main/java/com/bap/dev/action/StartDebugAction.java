@@ -41,8 +41,7 @@ public class StartDebugAction extends AnAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-        e.getPresentation().setEnabledAndVisible(psiFile instanceof PsiJavaFile);
+        e.getPresentation().setEnabledAndVisible(true);
     }
 
     @Override
