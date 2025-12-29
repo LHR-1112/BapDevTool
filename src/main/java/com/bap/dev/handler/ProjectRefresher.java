@@ -60,7 +60,7 @@ public class ProjectRefresher {
                 // 只要根目录下有 .develop 文件，就认为是 Bap 模块
                 if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
                     System.out.println("Auto-refreshing module: " + module.getName());
-                    refreshModule(root);
+                    refreshModule(root, true);
                     // 一个模块刷新一次即可 (假设只有一个根是 Bap 根)
                     break;
                 }
@@ -68,7 +68,17 @@ public class ProjectRefresher {
         }
     }
 
+    // 兼容旧代码的方法重载 (默认为静默，或者你可以根据调用点逐个修改)
     public void refreshModule(VirtualFile moduleDir) {
+        refreshModule(moduleDir, true);
+    }
+
+    /**
+     * 核心刷新方法
+     * @param moduleDir 模块根目录
+     * @param silentMode 是否静默模式 (true=不弹窗报错, false=弹窗报错)
+     */
+    public void refreshModule(VirtualFile moduleDir, boolean silentMode) {
         // 0. 保存文档
         ApplicationManager.getApplication().invokeAndWait(() -> {
             FileDocumentManager.getInstance().saveAllDocuments();
@@ -91,13 +101,13 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 配置文件损坏提示
-            showError("配置读取失败", "无法读取 .develop 配置文件: " + e.getMessage());
+            showError("配置读取失败", "无法读取 .develop 配置文件: " + e.getMessage(), silentMode);
             return;
         }
 
         if (uri == null || projectUuid == null) {
             // 🔴 关键信息缺失提示
-            showError("配置不完整", "配置文件中缺少 Uri 或 Project 属性，请检查 .develop 文件。");
+            showError("配置不完整", "配置文件中缺少 Uri 或 Project 属性，请检查 .develop 文件。", silentMode);
             return;
         }
 
@@ -108,7 +118,7 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 连接/鉴权失败提示 (这里会捕获密码错误)
-            showError("连接失败", "无法连接到服务器 [" + uri + "]。\n\n可能原因：\n1. 账号或密码错误\n2. 网络连接异常\n3. 服务端未启动\n\n详细错误: " + e.getMessage());
+            showError("连接失败", "无法连接到服务器 [" + uri + "]。\n\n可能原因：\n1. 账号或密码错误\n2. 网络连接异常\n3. 服务端未启动\n\n详细错误: " + e.getMessage(), silentMode);
             return;
         }
 
@@ -148,17 +158,23 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 刷新过程中的其他异常
-            showError("刷新异常", "同步过程中发生未知错误: " + e.getMessage());
+            showError("刷新异常", "同步过程中发生未知错误: " + e.getMessage(), silentMode);
         }
     }
 
-    // --- 🔴 新增：在 UI 线程弹出错误提示 ---
-    private void showError(String title, String content) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (!project.isDisposed()) {
-                Messages.showErrorDialog(project, content, title);
-            }
-        });
+    // 🔴 修改：增加 silentMode 判断
+    private void showError(String title, String content, boolean silentMode) {
+        if (silentMode) {
+            // 静默模式下只打印 Log，不打扰用户
+            System.err.println("[" + title + "] " + content);
+        } else {
+            // 手动模式下弹窗
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (!project.isDisposed()) {
+                    Messages.showErrorDialog(project, content, title);
+                }
+            });
+        }
     }
 
     // ... (保持 refreshResFolder, refreshJavaFolder, doubleCheckResource 等所有辅助方法不变) ...

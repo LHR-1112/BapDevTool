@@ -30,7 +30,8 @@ public class RefreshProjectAction extends AnAction {
             ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Module...", true) {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
-                    new ProjectRefresher(project).refreshModule(moduleRoot);
+                    // 🔴 修改：传入 false，表示这是手动操作，需要弹窗报错
+                    new ProjectRefresher(project).refreshModule(moduleRoot, false);
                 }
             });
         } else {

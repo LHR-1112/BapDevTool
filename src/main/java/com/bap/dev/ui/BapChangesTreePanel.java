@@ -378,7 +378,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     for (VirtualFile root : modulesToRefresh) {
                         indicator.setText("Refreshing " + root.getName() + "...");
-                        refresher.refreshModule(root);
+                        refresher.refreshModule(root, false);
                     }
                 }
             });
