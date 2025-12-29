@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.2.3"
+version = "1.2.4"
 
 repositories {
     mavenCentral()
@@ -74,6 +74,14 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.2.4</h3>
+            <ul>
+                <li><b>特性修改</b>：commit的提示窗口，自动聚焦到commit按钮，而不是提交信息窗口</li>
+                <li><b>特性修改</b>：BapChanges在commit/update等操作之后，自动聚焦到项目节点</li>
+                <li><b>特性修改</b>：代码Debug面板增加Rerun，自动换行，导出等按钮</li>
+                <li><b>bug修复</b>：修复密码错误、无法连接时，刷新项目无提示</li>
+            </ul>
+            
             <h3>v1.2.3</h3>
             <ul>
                 <li><b>新特性</b>：工程relocate的历史记录，增加删除功能</li>
