@@ -4,8 +4,6 @@ import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import bap.java.CJavaDebuggerDto;
 import com.bap.dev.BapRpcClient;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
@@ -59,8 +57,7 @@ public class StartDebugAction extends AnAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-        e.getPresentation().setEnabledAndVisible(psiFile instanceof PsiJavaFile);
+        e.getPresentation().setEnabledAndVisible(true);
     }
 
     @Override
