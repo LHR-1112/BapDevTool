@@ -13,22 +13,28 @@ import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
-import com.intellij.openapi.actionSystem.AnAction;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.editor.markup.TextAttributes;
+import com.intellij.openapi.fileEditor.FileDocumentManager; // 新增
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
+import com.intellij.psi.PsiManager; // 新增
+import com.intellij.ui.JBColor;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Files;
@@ -39,9 +45,22 @@ import java.util.regex.Pattern;
 
 public class StartDebugAction extends AnAction {
 
+    private static final String RERUN_TASK_KEY = "BAP_CLOUD_DEBUG_RERUN_TASK";
+
+    // 自定义日志颜色类型
+    private static final ConsoleViewContentType LOG_INFO_TYPE = new ConsoleViewContentType("LOG_INFO",
+            new TextAttributes(new JBColor(new Color(0, 180, 0), new Color(98, 151, 85)), null, null, null, Font.BOLD));
+    private static final ConsoleViewContentType LOG_WARN_TYPE = new ConsoleViewContentType("LOG_WARN",
+            new TextAttributes(new JBColor(new Color(180, 100, 0), new Color(204, 120, 50)), null, null, null, Font.BOLD));
+    private static final ConsoleViewContentType LOG_ERROR_TYPE = new ConsoleViewContentType("LOG_ERROR",
+            new TextAttributes(new JBColor(Color.RED, new Color(255, 107, 104)), null, null, null, Font.BOLD));
+    private static final ConsoleViewContentType LOG_FATAL_TYPE = new ConsoleViewContentType("LOG_FATAL",
+            new TextAttributes(new JBColor(Color.MAGENTA, new Color(255, 0, 255)), null, null, null, Font.BOLD));
+
     @Override
     public void update(@NotNull AnActionEvent e) {
-        e.getPresentation().setEnabledAndVisible(true);
+        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
+        e.getPresentation().setEnabledAndVisible(psiFile instanceof PsiJavaFile);
     }
 
     @Override
@@ -51,43 +70,11 @@ public class StartDebugAction extends AnAction {
 
         if (project == null || !(psiFile instanceof PsiJavaFile)) return;
 
-        PsiJavaFile javaFile = (PsiJavaFile) psiFile;
+        // 使用 VirtualFile，因为它在文件修改后依然有效
+        VirtualFile vFile = psiFile.getVirtualFile();
+        if (vFile == null) return;
 
-        // 1. 获取类信息
-        String[] classInfo = ReadAction.compute(() -> {
-            String pkg = javaFile.getPackageName();
-            PsiClass[] classes = javaFile.getClasses();
-            if (classes.length == 0) return null;
-            String name = classes[0].getName();
-            String code = javaFile.getText();
-            return new String[]{pkg, name, code};
-        });
-
-        if (classInfo == null) {
-            Messages.showWarningDialog("无法解析当前 Java 类。", "错误");
-            return;
-        }
-
-        String packageName = classInfo[0];
-        String className = classInfo[1];
-        String fullCode = classInfo[2];
-
-        // 1.1 构建新的包名 (追加 .debug)
-        String debugPackageName = (packageName == null || packageName.isEmpty())
-                ? "debug"
-                : packageName + ".debug";
-
-        // 1.2 修改源代码中的 package 声明
-        String modifiedCode;
-        if (packageName == null || packageName.isEmpty()) {
-            modifiedCode = "package " + debugPackageName + ";\n" + fullCode;
-        } else {
-            String regex = "package\\s+" + Pattern.quote(packageName) + "\\s*;";
-            modifiedCode = fullCode.replaceFirst(regex, "package " + debugPackageName + ";");
-        }
-
-        // 2. 获取连接配置
-        VirtualFile vFile = javaFile.getVirtualFile();
+        // 1. 获取连接配置 (配置通常不会变，可以在这里获取一次)
         String[] config = findConfig(vFile);
         if (config == null) {
             Messages.showWarningDialog("在当前模块路径下未找到 .develop 配置文件。", "配置丢失");
@@ -97,12 +84,68 @@ public class StartDebugAction extends AnAction {
         String user = config[1];
         String pwd = config[2];
 
-        // 3. 打开控制台 (修改为默认 Run 窗口)
+        // 2. 获取或创建控制台
         ConsoleView console = getOrCreateConsole(project);
+
+        // 3. 定义调试任务 (闭包中捕获 vFile，而不是写死的 code)
+        Runnable debugTask = () -> launchDebug(project, vFile, console, uri, user, pwd);
+
+        // 4. 绑定任务并执行
+        console.getComponent().putClientProperty(RERUN_TASK_KEY, debugTask);
+        debugTask.run();
+    }
+
+    /**
+     * 新增方法：负责保存文件、重新解析代码、应用修改逻辑，然后发起调试
+     */
+    private void launchDebug(Project project, VirtualFile vFile, ConsoleView console, String uri, String user, String pwd) {
+        // 1. 强制保存所有文档，确保磁盘上的文件是最新的（或者确保 PSI 获取的是最新的内存状态）
+        ApplicationManager.getApplication().runWriteAction(() -> FileDocumentManager.getInstance().saveAllDocuments());
+
+        // 2. 重新解析类信息 (ReadAction)
+        String[] classInfo = ReadAction.compute(() -> {
+            PsiFile psiFile = PsiManager.getInstance(project).findFile(vFile);
+            if (!(psiFile instanceof PsiJavaFile)) return null;
+            PsiJavaFile javaFile = (PsiJavaFile) psiFile;
+
+            String pkg = javaFile.getPackageName();
+            PsiClass[] classes = javaFile.getClasses();
+            if (classes.length == 0) return null;
+            String name = classes[0].getName();
+            String code = javaFile.getText(); // 获取最新的代码
+            return new String[]{pkg, name, code};
+        });
+
+        if (classInfo == null) {
+            printError(console, "Error: Unable to parse Java file. Please check the file syntax.");
+            return;
+        }
+
+        String packageName = classInfo[0];
+        String className = classInfo[1];
+        String fullCode = classInfo[2];
+
+        // 3. 应用 .debug 包名修改逻辑
+        String debugPackageName = (packageName == null || packageName.isEmpty())
+                ? "debug"
+                : packageName + ".debug";
+
+        String modifiedCode;
+        if (packageName == null || packageName.isEmpty()) {
+            modifiedCode = "package " + debugPackageName + ";\n" + fullCode;
+        } else {
+            String regex = "package\\s+" + Pattern.quote(packageName) + "\\s*;";
+            modifiedCode = fullCode.replaceFirst(regex, "package " + debugPackageName + ";");
+        }
+
+        // 4. 执行调试
+        executeDebug(project, console, className, debugPackageName, modifiedCode, uri, user, pwd);
+    }
+
+    private void executeDebug(Project project, ConsoleView console, String className, String debugPackageName, String code, String uri, String user, String pwd) {
         console.clear();
         console.print("Preparing to debug class [" + className + "] in package [" + debugPackageName + "]...\n", ConsoleViewContentType.SYSTEM_OUTPUT);
 
-        // 4. 后台执行
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Debugging " + className, true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
@@ -117,7 +160,7 @@ public class StartDebugAction extends AnAction {
                     javaCode.setName(className);
                     javaCode.setMainClass(className);
                     javaCode.setUuid(UUID.randomUUID().toString().replace("-", "_"));
-                    javaCode.setCode(modifiedCode);
+                    javaCode.setCode(code);
 
                     indicator.setText("Executing...");
                     console.print("Uploading and Executing...\n", ConsoleViewContentType.SYSTEM_OUTPUT);
@@ -166,39 +209,50 @@ public class StartDebugAction extends AnAction {
         });
     }
 
-    // --- 核心修改：使用 ExecutionManager 在 Run 窗口打开 ---
     private ConsoleView getOrCreateConsole(Project project) {
         final String consoleTitle = "Cloud Debug";
         RunContentManager contentManager = ExecutionManager.getInstance(project).getContentManager();
 
-        // 1. 尝试查找已存在的 Tab
         for (RunContentDescriptor descriptor : contentManager.getAllDescriptors()) {
             if (consoleTitle.equals(descriptor.getDisplayName()) && descriptor.getExecutionConsole() instanceof ConsoleView) {
-                // 激活这个 Tab
                 contentManager.toFrontRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
                 return (ConsoleView) descriptor.getExecutionConsole();
             }
         }
 
-        // 2. 如果不存在，创建新的 ConsoleView
         ConsoleView consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
+        JComponent consolePanel = consoleView.getComponent(); // Force init
 
-        // 3. 包装成 RunContentDescriptor
+        DefaultActionGroup toolbarActions = new DefaultActionGroup();
+
+        // 1. Rerun Action
+        toolbarActions.add(new RerunAction(consoleView));
+
+        // 2. Console default actions
+        AnAction[] consoleActions = consoleView.createConsoleActions();
+        for (AnAction action : consoleActions) {
+            toolbarActions.add(action);
+        }
+
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(ActionPlaces.RUNNER_TOOLBAR, toolbarActions, false);
+        toolbar.setTargetComponent(consolePanel);
+
+        JPanel uiPanel = new JPanel(new BorderLayout());
+        uiPanel.add(consolePanel, BorderLayout.CENTER);
+        uiPanel.add(toolbar.getComponent(), BorderLayout.WEST);
+
         RunContentDescriptor descriptor = new RunContentDescriptor(
                 consoleView,
                 null,
-                consoleView.getComponent(),
+                uiPanel,
                 consoleTitle
         );
-        // 设置一个 ID 防止混淆（可选）
         descriptor.setExecutionId(System.nanoTime());
 
-        // 4. 显示到 Run 窗口
         contentManager.showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
 
         return consoleView;
     }
-    // -----------------------------------------------------
 
     private String[] findConfig(VirtualFile current) {
         VirtualFile dir = current.getParent();
@@ -240,19 +294,68 @@ public class StartDebugAction extends AnAction {
             if (traces != null && !traces.isEmpty()) {
                 console.print("\n--- Remote Traces ---\n", ConsoleViewContentType.SYSTEM_OUTPUT);
                 for (String line : traces) {
-                    if (line.contains("ERROR") || line.contains("Exception")) {
-                        console.print(line + "\n", ConsoleViewContentType.ERROR_OUTPUT);
-                    } else {
-                        console.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
-                    }
+                    printColoredLog(console, line);
                 }
             }
             console.print("----------------------------------------------------\n", ConsoleViewContentType.LOG_INFO_OUTPUT);
         });
     }
 
+    private void printColoredLog(ConsoleView console, String line) {
+        String tag = null;
+        ConsoleViewContentType type = null;
+
+        if (line.contains("[FATAL]")) {
+            tag = "[FATAL]";
+            type = LOG_FATAL_TYPE;
+        } else if (line.contains("[ERROR]")) {
+            tag = "[ERROR]";
+            type = LOG_ERROR_TYPE;
+        } else if (line.contains("[WARN]")) {
+            tag = "[WARN]";
+            type = LOG_WARN_TYPE;
+        } else if (line.contains("[INFO]")) {
+            tag = "[INFO]";
+            type = LOG_INFO_TYPE;
+        }
+
+        if (tag != null) {
+            int idx = line.indexOf(tag);
+            if (idx > 0) {
+                console.print(line.substring(0, idx), ConsoleViewContentType.NORMAL_OUTPUT);
+            }
+            console.print(tag, type);
+            console.print(line.substring(idx + tag.length()) + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
+        } else {
+            console.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
+        }
+    }
+
     private void printError(ConsoleView console, String msg) {
         ApplicationManager.getApplication().invokeLater(() ->
                 console.print("\n[ERROR] " + msg + "\n", ConsoleViewContentType.ERROR_OUTPUT));
+    }
+
+    private static class RerunAction extends AnAction implements DumbAware {
+        private final ConsoleView consoleView;
+
+        public RerunAction(ConsoleView consoleView) {
+            super("Rerun", "Rerun cloud debug", AllIcons.Actions.Restart);
+            this.consoleView = consoleView;
+        }
+
+        @Override
+        public void actionPerformed(@NotNull AnActionEvent e) {
+            Object taskObj = consoleView.getComponent().getClientProperty(RERUN_TASK_KEY);
+            if (taskObj instanceof Runnable) {
+                ((Runnable) taskObj).run();
+            }
+        }
+
+        @Override
+        public void update(@NotNull AnActionEvent e) {
+            Object taskObj = consoleView.getComponent().getClientProperty(RERUN_TASK_KEY);
+            e.getPresentation().setEnabled(taskObj instanceof Runnable);
+        }
     }
 }

@@ -9,6 +9,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.ui.BapChangesTreePanel;
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
@@ -137,6 +138,9 @@ public class ProjectRefresher {
                 PsiManager.getInstance(project).dropPsiCaches();
                 FileStatusManager.getInstance(project).fileStatusesChanged();
                 ProjectView.getInstance(project).refresh();
+
+                // 🔴 新增：设置最后刷新的模块，以便 TreePanel 自动选中
+                project.putUserData(BapChangesTreePanel.LAST_BAP_MODULE_ROOT, moduleDir);
 
                 project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
             });

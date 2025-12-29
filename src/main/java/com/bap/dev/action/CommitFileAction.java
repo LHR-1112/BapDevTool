@@ -6,6 +6,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.ui.BapChangesTreePanel;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -153,7 +154,8 @@ public class CommitFileAction extends AnAction {
 
             client.getService().commitCode(projectUuid, pkg);
 
-            onSuccess(project, files);
+            // 🔴 修改：传入 moduleRoot
+            onSuccess(project, files, moduleRoot);
 
         } finally {
             client.shutdown();
@@ -246,7 +248,8 @@ public class CommitFileAction extends AnAction {
         updateMap.computeIfAbsent(folderName, k -> new ArrayList<>()).add(code);
     }
 
-    private void onSuccess(Project project, VirtualFile[] files) {
+    // 🔴 修改：增加 moduleRoot 参数 (注意：原参数类型是 VirtualFile[]，这里统一一下，或者转为 List)
+    private void onSuccess(Project project, VirtualFile[] files, VirtualFile moduleRoot) {
         ApplicationManager.getApplication().invokeLater(() -> {
             List<VirtualFile> toDelete = new ArrayList<>();
 
@@ -290,6 +293,9 @@ public class CommitFileAction extends AnAction {
 
             PsiManager.getInstance(project).dropPsiCaches();
             FileStatusManager.getInstance(project).fileStatusesChanged();
+
+            // 🔴 新增：设置自动聚焦
+            project.putUserData(BapChangesTreePanel.LAST_BAP_MODULE_ROOT, moduleRoot);
 
             sendNotification(project, "提交成功", "已提交 " + files.length + " 个文件。");
             project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
@@ -457,10 +463,14 @@ public class CommitFileAction extends AnAction {
             return dialogPanel;
         }
 
+        // --- 🔴 修改部分开始 ---
         @Override
         public @Nullable JComponent getPreferredFocusedComponent() {
-            return commentArea;
+            // 原代码：return commentArea;
+            // 修改后：获取 OK (Commit) 按钮并设为默认焦点
+            return getButton(getOKAction());
         }
+        // --- 🔴 修改部分结束 ---
 
         public String getComment() {
             return commentArea.getText().trim();

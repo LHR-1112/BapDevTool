@@ -22,6 +22,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
+import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -45,6 +46,9 @@ import java.util.*;
 import java.util.List;
 
 public class BapChangesTreePanel extends SimpleToolWindowPanel implements Disposable {
+
+    // 🔴 1. 定义 Key，用于在 Action 和 Panel 之间传递最后操作的模块
+    public static final Key<VirtualFile> LAST_BAP_MODULE_ROOT = Key.create("LAST_BAP_MODULE_ROOT");
 
     private final Project project;
     private final Tree tree;
@@ -201,7 +205,38 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     }
                 }
             }
+
+            // 🔴 2. 检查是否有需要自动聚焦的模块
+            VirtualFile targetModule = project.getUserData(LAST_BAP_MODULE_ROOT);
+            if (targetModule != null) {
+                // 消费掉这个 Key，避免重复跳转
+                project.putUserData(LAST_BAP_MODULE_ROOT, null);
+
+                // 查找并选中节点
+                DefaultMutableTreeNode targetNode = findModuleNode(root, targetModule);
+                if (targetNode != null) {
+                    TreePath path = new TreePath(targetNode.getPath());
+                    tree.setSelectionPath(path);
+                    tree.scrollPathToVisible(path);
+                    // 确保展开
+                    tree.expandPath(path);
+                }
+            }
         });
+    }
+
+    // 🔴 3. 辅助方法：查找模块节点
+    private DefaultMutableTreeNode findModuleNode(DefaultMutableTreeNode root, VirtualFile moduleRoot) {
+        for (int i = 0; i < root.getChildCount(); i++) {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) root.getChildAt(i);
+            Object userObj = node.getUserObject();
+            if (userObj instanceof ModuleWrapper) {
+                if (((ModuleWrapper) userObj).rootFile.equals(moduleRoot)) {
+                    return node;
+                }
+            }
+        }
+        return null;
     }
 
     // --- 包装类 (实现 equals/hashCode/toString 以支持 TreeState) ---
