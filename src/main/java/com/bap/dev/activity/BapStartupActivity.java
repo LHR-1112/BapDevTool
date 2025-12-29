@@ -20,7 +20,6 @@ public class BapStartupActivity implements StartupActivity {
         EditorFactory.getInstance().getEventMulticaster().addDocumentListener(listener, project);
 
         // 2. 启动后台任务刷新所有模块
-        // FIXME 这里因为在项目刷新时添加了无法连接的报错，会导致一些废弃的项目在打开时疯狂报无法连接，所以先注释掉
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
