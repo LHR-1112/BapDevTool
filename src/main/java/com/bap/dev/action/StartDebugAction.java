@@ -45,13 +45,17 @@ public class StartDebugAction extends AnAction {
 
     private static final String RERUN_TASK_KEY = "BAP_CLOUD_DEBUG_RERUN_TASK";
 
-    // 自定义日志颜色类型
+    // 🔴 修改：INFO 改为蓝色
     private static final ConsoleViewContentType LOG_INFO_TYPE = new ConsoleViewContentType("LOG_INFO",
-            new TextAttributes(new JBColor(new Color(0, 180, 0), new Color(98, 151, 85)), null, null, null, Font.BOLD));
+            new TextAttributes(new JBColor(new Color(0, 102, 204), new Color(73, 156, 228)), null, null, null, Font.BOLD));
+
+    // 🔴 修改：WARN 改为黄色 (浅色背景用暗黄，深色背景用亮黄)
     private static final ConsoleViewContentType LOG_WARN_TYPE = new ConsoleViewContentType("LOG_WARN",
-            new TextAttributes(new JBColor(new Color(180, 100, 0), new Color(204, 120, 50)), null, null, null, Font.BOLD));
+            new TextAttributes(new JBColor(new Color(204, 153, 0), Color.YELLOW), null, null, null, Font.BOLD));
+
     private static final ConsoleViewContentType LOG_ERROR_TYPE = new ConsoleViewContentType("LOG_ERROR",
             new TextAttributes(new JBColor(Color.RED, new Color(255, 107, 104)), null, null, null, Font.BOLD));
+
     private static final ConsoleViewContentType LOG_FATAL_TYPE = new ConsoleViewContentType("LOG_FATAL",
             new TextAttributes(new JBColor(Color.MAGENTA, new Color(255, 0, 255)), null, null, null, Font.BOLD));
 
