@@ -17,6 +17,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager; // 引入
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager; // 引入
+import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -67,10 +68,6 @@ public class ProjectRefresher {
     }
 
     public void refreshModule(VirtualFile moduleDir) {
-        // ... (保持原有的 refreshModule 代码逻辑不变) ...
-        // 为了节省篇幅，这里省略 refreshModule 的具体实现，请保留你现有的代码
-        // 确保它最后会调用 project.getMessageBus().syncPublisher(...).onChangesUpdated();
-
         // 0. 保存文档
         ApplicationManager.getApplication().invokeAndWait(() -> {
             FileDocumentManager.getInstance().saveAllDocuments();
@@ -78,7 +75,10 @@ public class ProjectRefresher {
 
         // 1. 读取配置
         File confFile = new File(moduleDir.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-        if (!confFile.exists()) return;
+        if (!confFile.exists()) {
+            // 配置文件不存在通常不用弹窗，因为可能是普通文件夹
+            return;
+        }
 
         String uri = null, user = null, pwd = null, projectUuid = null;
         try {
@@ -87,9 +87,18 @@ public class ProjectRefresher {
             user = extractAttr(content, "User");
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
-        } catch (Exception e) { e.printStackTrace(); return; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 🔴 配置文件损坏提示
+            showError("配置读取失败", "无法读取 .develop 配置文件: " + e.getMessage());
+            return;
+        }
 
-        if (uri == null || projectUuid == null) return;
+        if (uri == null || projectUuid == null) {
+            // 🔴 关键信息缺失提示
+            showError("配置不完整", "配置文件中缺少 Uri 或 Project 属性，请检查 .develop 文件。");
+            return;
+        }
 
         // 2. 获取客户端
         BapRpcClient client = null;
@@ -97,12 +106,17 @@ public class ProjectRefresher {
             client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         } catch (Exception e) {
             e.printStackTrace();
+            // 🔴 连接/鉴权失败提示 (这里会捕获密码错误)
+            showError("连接失败", "无法连接到服务器 [" + uri + "]。\n\n可能原因：\n1. 账号或密码错误\n2. 网络连接异常\n3. 服务端未启动\n\n详细错误: " + e.getMessage());
             return;
         }
 
         try {
             VirtualFile srcDir = moduleDir.findChild("src");
-            if (srcDir == null || !srcDir.exists()) return;
+            if (srcDir == null || !srcDir.exists()) {
+                // src 不存在也不算严重错误，可能是空项目，可以选择不提示或 log
+                return;
+            }
 
             BapFileStatusService statusService = BapFileStatusService.getInstance(project);
 
@@ -129,7 +143,18 @@ public class ProjectRefresher {
 
         } catch (Exception e) {
             e.printStackTrace();
+            // 🔴 刷新过程中的其他异常
+            showError("刷新异常", "同步过程中发生未知错误: " + e.getMessage());
         }
+    }
+
+    // --- 🔴 新增：在 UI 线程弹出错误提示 ---
+    private void showError(String title, String content) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!project.isDisposed()) {
+                Messages.showErrorDialog(project, content, title);
+            }
+        });
     }
 
     // ... (保持 refreshResFolder, refreshJavaFolder, doubleCheckResource 等所有辅助方法不变) ...
