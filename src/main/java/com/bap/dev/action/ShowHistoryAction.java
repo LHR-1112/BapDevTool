@@ -47,21 +47,11 @@ public class ShowHistoryAction extends AnAction {
             return;
         }
 
-        // 2. 解析全类名
-        String fullClassName = ReadAction.compute(() -> {
-            if (!selectedFile.isValid()) return null;
-            PsiFile psiFile = PsiManager.getInstance(project).findFile(selectedFile);
-            if (psiFile instanceof PsiJavaFile) {
-                PsiJavaFile javaFile = (PsiJavaFile) psiFile;
-                String packageName = javaFile.getPackageName();
-                String className = selectedFile.getNameWithoutExtension();
-                return packageName.isEmpty() ? className : packageName + "." + className;
-            }
-            return null;
-        });
+        // 2. 解析云端标识 (Java全类名 或 资源文件相对路径)
+        String remoteKey = resolveRemoteKey(project, moduleRoot, selectedFile);
 
-        if (fullClassName == null) {
-            Messages.showWarningDialog("无法解析 Java 类名，请确认文件有效。", "错误");
+        if (remoteKey == null) {
+            Messages.showWarningDialog("无法解析该文件的云端路径。\nJava文件需正确配置包名，资源文件需位于 src/res 目录下。", "不支持的文件");
             return;
         }
 
@@ -70,12 +60,37 @@ public class ShowHistoryAction extends AnAction {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                queryHistory(project, moduleRoot, fullClassName, selectedFile);
+                // 传入解析好的 remoteKey
+                queryHistory(project, moduleRoot, remoteKey, selectedFile);
             }
         });
     }
 
-    private void queryHistory(Project project, VirtualFile moduleRoot, String fullClassName, VirtualFile localFile) {
+    // --- 🔴 新增：统一解析文件标识 ---
+    private String resolveRemoteKey(Project project, VirtualFile moduleRoot, VirtualFile file) {
+        return ReadAction.compute(() -> {
+            // Case A: Java 文件 -> 获取全类名 (com.pkg.MyClass)
+            if ("java".equalsIgnoreCase(file.getExtension())) {
+                PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+                if (psiFile instanceof PsiJavaFile) {
+                    PsiJavaFile javaFile = (PsiJavaFile) psiFile;
+                    String packageName = javaFile.getPackageName();
+                    String className = file.getNameWithoutExtension();
+                    return packageName.isEmpty() ? className : packageName + "." + className;
+                }
+            }
+
+            // Case B: 资源文件 -> 获取相对于 src/res 的路径 (pt/view/index.html)
+            VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
+            if (resDir != null && VfsUtilCore.isAncestor(resDir, file, true)) {
+                return VfsUtilCore.getRelativePath(file, resDir);
+            }
+
+            return null;
+        });
+    }
+
+    private void queryHistory(Project project, VirtualFile moduleRoot, String remoteKey, VirtualFile localFile) {
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
         String uri = null, user = null, pwd = null, projectUuid = null;
         try {
@@ -98,8 +113,8 @@ public class ShowHistoryAction extends AnAction {
         try {
             client.connect(uri, user, pwd);
 
-            // 调用查询接口
-            List<VersionNode> historyList = client.getService().queryFileHistory(projectUuid, fullClassName);
+            // 调用查询接口 (Java类名 和 资源路径 均通过此接口查询)
+            List<VersionNode> historyList = client.getService().queryFileHistory(projectUuid, remoteKey);
 
             // UI 线程显示列表
             final String fUri = uri;
@@ -110,7 +125,7 @@ public class ShowHistoryAction extends AnAction {
                 if (historyList == null || historyList.isEmpty()) {
                     Messages.showInfoMessage("未找到该文件的云端历史记录。", "无记录");
                 } else {
-                    // 弹出列表对话框
+                    // 弹出列表对话框 (复用 HistoryListDialog)
                     new HistoryListDialog(project, localFile, historyList, fUri, fUser, fPwd).show();
                 }
             });
@@ -123,7 +138,7 @@ public class ShowHistoryAction extends AnAction {
         }
     }
 
-    // --- 辅助方法 (复用) ---
+    // --- 辅助方法 ---
 
     private VirtualFile findModuleRoot(VirtualFile current) {
         VirtualFile dir = current.isDirectory() ? current : current.getParent();
@@ -148,13 +163,13 @@ public class ShowHistoryAction extends AnAction {
     @Override
     public void update(@NotNull AnActionEvent e) {
         VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
-        // 仅 Java 文件显示
-        boolean isJava = file != null && !file.isDirectory() && "java".equalsIgnoreCase(file.getExtension());
-        // 且必须在 src 目录下 (根据需求)
-        // 简单判断：路径包含 /src/
+
+        // 🔴 修改：解除文件类型限制，只要是文件且在 src 目录下即可
+        // 具体的路径合法性 (是否在 src/res 或 src/java) 交给 actionPerformed 判断
+        boolean isValidFile = file != null && !file.isDirectory();
         boolean inSrc = file != null && file.getPath().contains("/src/");
 
-        e.getPresentation().setEnabledAndVisible(isJava && inSrc);
+        e.getPresentation().setEnabledAndVisible(isValidFile && inSrc);
     }
 
     @Override
