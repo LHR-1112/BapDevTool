@@ -8,7 +8,7 @@ import com.bap.dev.service.BapFileStatusService;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.DataManager;
-import com.intellij.ide.util.treeView.TreeState; // 引入 TreeState
+import com.intellij.ide.util.treeView.TreeState;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
@@ -31,7 +31,9 @@ import com.intellij.ui.JBColor;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
+// 🔴 修复：TreeUtil 的正确包路径 (IntelliJ 2020+)
 import com.intellij.util.ui.tree.TreeUtil;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,7 +41,9 @@ import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreeCellRenderer;
 import javax.swing.tree.TreePath;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.*;
@@ -47,7 +51,6 @@ import java.util.List;
 
 public class BapChangesTreePanel extends SimpleToolWindowPanel implements Disposable {
 
-    // 🔴 1. 定义 Key，用于在 Action 和 Panel 之间传递最后操作的模块
     public static final Key<VirtualFile> LAST_BAP_MODULE_ROOT = Key.create("LAST_BAP_MODULE_ROOT");
 
     private final Project project;
@@ -64,7 +67,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         tree.setRootVisible(false);
         tree.setCellRenderer(new BapChangeRenderer());
 
-        // 工具栏配置
         DefaultActionGroup group = new DefaultActionGroup();
         group.add(new ToolbarRefreshAction());
         group.add(new ExpandAllAction());
@@ -97,6 +99,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                // 处理按钮点击
+                handleButtonClick(e);
+
                 if (e.getClickCount() == 2) {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
                     if (path != null) {
@@ -106,7 +111,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                             if (userObject instanceof VirtualFileWrapper) {
                                 VirtualFile file = ((VirtualFileWrapper) userObject).file;
                                 if (file.isValid() && !file.isDirectory()) {
-                                    // 双击比对
                                     AnAction compareAction = ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction");
                                     if (compareAction != null) {
                                         DataContext dataContext = DataManager.getInstance().getDataContext(tree);
@@ -136,16 +140,57 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         });
     }
 
+    private void handleButtonClick(MouseEvent e) {
+        if (!SwingUtilities.isLeftMouseButton(e)) return;
+
+        TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+        if (path == null) return;
+
+        DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+        Object userObject = node.getUserObject();
+
+        if (userObject instanceof ModuleWrapper) {
+            Rectangle bounds = tree.getPathBounds(path);
+            if (bounds != null) {
+                int x = e.getX();
+                int rightEdge = bounds.x + bounds.width;
+
+                // 布局顺序：[Update] [Commit] [Publish] (最右)
+                // 按钮区域在整个节点的右侧，所以我们要计算距离右边缘的距离
+
+                int distFromRight = rightEdge - x;
+                int btnWidth = 22; // 估算每个按钮的点击宽度
+
+                tree.setSelectionPath(path);
+
+                if (distFromRight > 0 && distFromRight < btnWidth) {
+                    runAction("com.bap.dev.action.PublishProjectAction", e);
+                } else if (distFromRight >= btnWidth && distFromRight < btnWidth * 2) {
+                    runAction("com.bap.dev.action.CommitAllAction", e);
+                } else if (distFromRight >= btnWidth * 2 && distFromRight < btnWidth * 3) {
+                    runAction("com.bap.dev.action.UpdateAllAction", e);
+                }
+            }
+        }
+    }
+
+    private void runAction(String actionId, MouseEvent e) {
+        AnAction action = ActionManager.getInstance().getAction(actionId);
+        if (action != null) {
+            DataContext dataContext = DataManager.getInstance().getDataContext(tree);
+            AnActionEvent event = AnActionEvent.createFromAnAction(action, e, ActionPlaces.TOOLWINDOW_CONTENT, dataContext);
+            action.actionPerformed(event);
+        }
+    }
+
     @Override
     public void dispose() {
     }
 
-    // --- 核心逻辑：重建树 ---
     private void rebuildTree() {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
 
-            // 1. 保存当前状态 (展开、选中)
             TreeState state = TreeState.createOn(tree);
 
             DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
@@ -155,8 +200,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             bapModules.sort(Comparator.comparing(m -> m.name));
 
             Map<String, BapFileStatus> statuses = BapFileStatusService.getInstance(project).getAllStatuses();
-
-            boolean hasAnyChanges = false;
 
             for (ModuleWrapper moduleWrapper : bapModules) {
                 DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(moduleWrapper);
@@ -172,8 +215,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
                         if (path.startsWith(moduleWrapper.rootFile.getPath())) {
                             VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-                            // 对于 DELETED_LOCALLY，file 可能是 null 或无效，这里暂且只处理有效的或特殊处理
-                            // 如果是红D占位符，通常它是存在的
                             if (file != null) {
                                 moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(file);
                             }
@@ -182,7 +223,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
 
                 if (!moduleChanges.isEmpty()) {
-                    hasAnyChanges = true;
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, "Modified");
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, "Added");
                     addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, "Deleted");
@@ -190,12 +230,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             }
 
             treeModel.reload();
-
-            // 2. 恢复状态
             state.applyTo(tree);
 
-            // 3. 如果是第一次加载或者没有状态，默认展开有内容的节点
-            // (state.applyTo 可能会覆盖这个，但如果有新节点，applyTo 不会处理)
             if (state.isEmpty()) {
                 for (int i = 0; i < tree.getRowCount(); i++) {
                     TreePath path = tree.getPathForRow(i);
@@ -206,26 +242,20 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
             }
 
-            // 🔴 2. 检查是否有需要自动聚焦的模块
             VirtualFile targetModule = project.getUserData(LAST_BAP_MODULE_ROOT);
             if (targetModule != null) {
-                // 消费掉这个 Key，避免重复跳转
                 project.putUserData(LAST_BAP_MODULE_ROOT, null);
-
-                // 查找并选中节点
                 DefaultMutableTreeNode targetNode = findModuleNode(root, targetModule);
                 if (targetNode != null) {
                     TreePath path = new TreePath(targetNode.getPath());
                     tree.setSelectionPath(path);
                     tree.scrollPathToVisible(path);
-                    // 确保展开
                     tree.expandPath(path);
                 }
             }
         });
     }
 
-    // 🔴 3. 辅助方法：查找模块节点
     private DefaultMutableTreeNode findModuleNode(DefaultMutableTreeNode root, VirtualFile moduleRoot) {
         for (int i = 0; i < root.getChildCount(); i++) {
             DefaultMutableTreeNode node = (DefaultMutableTreeNode) root.getChildAt(i);
@@ -239,15 +269,11 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         return null;
     }
 
-    // --- 包装类 (实现 equals/hashCode/toString 以支持 TreeState) ---
-
     private static class ModuleWrapper {
         String name;
         VirtualFile rootFile;
         ModuleWrapper(String name, VirtualFile rootFile) { this.name = name; this.rootFile = rootFile; }
-
-        @Override public String toString() { return name; } // TreeState 默认用 toString 作为 ID
-
+        @Override public String toString() { return name; }
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -255,22 +281,14 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             ModuleWrapper that = (ModuleWrapper) o;
             return Objects.equals(rootFile.getPath(), that.rootFile.getPath());
         }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(rootFile.getPath());
-        }
+        @Override public int hashCode() { return Objects.hash(rootFile.getPath()); }
     }
 
     private static class CategoryWrapper {
-        String title; // 用于显示: "Modified (3)"
-        BapFileStatus status; // 用于逻辑标识
-
+        String title;
+        BapFileStatus status;
         CategoryWrapper(String title, BapFileStatus status) { this.title = title; this.status = status; }
-
-        // 关键：toString 返回固定的标识符，不包含变动的数字
         @Override public String toString() { return status.name(); }
-
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -278,20 +296,14 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             CategoryWrapper that = (CategoryWrapper) o;
             return status == that.status;
         }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(status);
-        }
+        @Override public int hashCode() { return Objects.hash(status); }
     }
 
     private static class VirtualFileWrapper {
         VirtualFile file;
         BapFileStatus status;
         VirtualFileWrapper(VirtualFile file, BapFileStatus status) { this.file = file; this.status = status; }
-
         @Override public String toString() { return file.getName(); }
-
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -299,15 +311,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             VirtualFileWrapper that = (VirtualFileWrapper) o;
             return Objects.equals(file.getPath(), that.file.getPath());
         }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(file.getPath());
-        }
+        @Override public int hashCode() { return Objects.hash(file.getPath()); }
     }
-
-    // --- 以下方法保持不变，请直接复制之前的实现 ---
-    // findAllBapModules, getData, getFileFromPath, ToolbarRefreshAction, ExpandAllAction, CollapseAllAction, LocateCurrentFileAction, getModuleRootFromNode, findModuleRoot, showContextMenu, addStatusCategory, BapChangeRenderer
 
     private List<ModuleWrapper> findAllBapModules() {
         List<ModuleWrapper> result = new ArrayList<>();
@@ -358,7 +363,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
     private class ToolbarRefreshAction extends AnAction {
         public ToolbarRefreshAction() { super("Refresh", "Refresh selected module", AllIcons.Actions.Refresh); }
-        @Override public void actionPerformed(@NotNull AnActionEvent e) { /* ... 代码同上 ... */
+        @Override public void actionPerformed(@NotNull AnActionEvent e) {
             TreePath selectionPath = tree.getSelectionPath();
             List<VirtualFile> modulesToRefresh = new ArrayList<>();
             if (selectionPath != null) {
@@ -367,7 +372,6 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 if (moduleRoot != null) modulesToRefresh.add(moduleRoot);
             }
             if (modulesToRefresh.isEmpty()) {
-                // 刷新所有
                 List<ModuleWrapper> allBapModules = findAllBapModules();
                 for (ModuleWrapper m : allBapModules) modulesToRefresh.add(m.rootFile);
             }
@@ -459,27 +463,24 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         ActionManager am = ActionManager.getInstance();
 
         if (userObject instanceof ModuleWrapper) {
-            // --- 模块级操作 ---
             group.add(am.getAction("com.bap.dev.action.RefreshProjectAction"));
             group.addSeparator();
-            group.add(am.getAction("com.bap.dev.action.UpdateLibsAction")); // 依赖更新
+            group.add(am.getAction("com.bap.dev.action.UpdateLibsAction"));
             group.add(am.getAction("com.bap.dev.action.UpdateAllAction"));
             group.addSeparator();
-            group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction")); // 项目历史
+            group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CommitAllAction"));
             group.add(am.getAction("com.bap.dev.action.PublishProjectAction"));
             group.addSeparator();
-            group.add(am.getAction("com.bap.dev.action.RelocateProjectAction")); // 重定向
-            group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));   // Admin Tool
-
+            group.add(am.getAction("com.bap.dev.action.RelocateProjectAction"));
+            group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));
         } else if (userObject instanceof VirtualFileWrapper) {
-            // --- 文件级操作 ---
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
             group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CompareJavaCodeAction"));
-            group.add(am.getAction("com.bap.dev.action.ShowHistoryAction")); // 单文件历史
+            group.add(am.getAction("com.bap.dev.action.ShowHistoryAction"));
         }
 
         if (group.getChildrenCount() > 0) {
@@ -500,13 +501,67 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         }
     }
 
-    private static class BapChangeRenderer extends ColoredTreeCellRenderer {
-        @Override public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+    // --- 🔴 修复布局：使用 FlowLayout 防止按钮错位 ---
+    private static class BapChangeRenderer implements TreeCellRenderer {
+
+        private final ColoredTreeCellRenderer fileRenderer = new ColoredTreeCellRenderer() {
+            @Override
+            public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+                renderContent(this, value);
+            }
+        };
+
+        // 🔴 关键修复：改为 FlowLayout(LEFT)，让按钮紧跟文本
+        private final JPanel modulePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+
+        private final ColoredTreeCellRenderer moduleTextRenderer = new ColoredTreeCellRenderer() {
+            @Override
+            public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+                renderContent(this, value);
+            }
+        };
+        private final JPanel buttonPanel = new JPanel(new GridLayout(1, 3, 2, 0));
+
+        public BapChangeRenderer() {
+            modulePanel.setOpaque(true);
+            buttonPanel.setOpaque(false);
+
+            buttonPanel.add(new JLabel(AllIcons.Actions.CheckOut));
+            buttonPanel.add(new JLabel(AllIcons.Actions.Commit));
+            buttonPanel.add(new JLabel(AllIcons.Actions.Execute));
+
+            // 直接添加，FlowLayout 会按顺序从左到右排列
+            modulePanel.add(moduleTextRenderer);
+            modulePanel.add(buttonPanel);
+        }
+
+        @Override
+        public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+            Object userObject = ((DefaultMutableTreeNode) value).getUserObject();
+
+            if (userObject instanceof ModuleWrapper) {
+                moduleTextRenderer.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
+                moduleTextRenderer.setOpaque(false);
+
+                if (selected) {
+                    modulePanel.setBackground(UIUtil.getTreeSelectionBackground(hasFocus));
+                    moduleTextRenderer.setForeground(UIUtil.getTreeSelectionForeground(hasFocus));
+                } else {
+                    modulePanel.setBackground(UIUtil.getTreeBackground());
+                    moduleTextRenderer.setForeground(UIUtil.getTreeForeground());
+                }
+                return modulePanel;
+            } else {
+                return fileRenderer.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
+            }
+        }
+
+        private void renderContent(ColoredTreeCellRenderer renderer, Object value) {
             if (value instanceof DefaultMutableTreeNode) {
                 Object userObject = ((DefaultMutableTreeNode) value).getUserObject();
                 if (userObject instanceof ModuleWrapper) {
-                    append(((ModuleWrapper) userObject).name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-                    setIcon(AllIcons.Nodes.Module);
+                    renderer.append(((ModuleWrapper) userObject).name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+                    renderer.setIcon(AllIcons.Nodes.Module);
                 } else if (userObject instanceof CategoryWrapper) {
                     CategoryWrapper wrapper = (CategoryWrapper) userObject;
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
@@ -514,8 +569,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     if (wrapper.status == BapFileStatus.MODIFIED) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getModifiedColorObj());
                     else if (wrapper.status == BapFileStatus.ADDED) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getAddedColorObj());
                     else if (wrapper.status == BapFileStatus.DELETED_LOCALLY) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getDeletedColorObj());
-                    append(wrapper.title, attr);
-                    setIcon(AllIcons.Nodes.Folder);
+                    renderer.append(wrapper.title, attr);
+                    renderer.setIcon(AllIcons.Nodes.Folder);
                 } else if (userObject instanceof VirtualFileWrapper) {
                     VirtualFileWrapper wrapper = (VirtualFileWrapper) userObject;
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
@@ -529,12 +584,11 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                         case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = " [A]"; break;
                         case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = " [D]"; break;
                     }
-                    append(wrapper.file.getName(), attr);
-                    append(suffix, SimpleTextAttributes.GRAYED_ATTRIBUTES);
-                    if (wrapper.file.isDirectory()) setIcon(AllIcons.Nodes.Folder);
-                    else if ("java".equalsIgnoreCase(wrapper.file.getExtension())) setIcon(AllIcons.FileTypes.Java);
-                    else setIcon(AllIcons.FileTypes.Text);
-
+                    renderer.append(wrapper.file.getName(), attr);
+                    renderer.append(suffix, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+                    if (wrapper.file.isDirectory()) renderer.setIcon(AllIcons.Nodes.Folder);
+                    else if ("java".equalsIgnoreCase(wrapper.file.getExtension())) renderer.setIcon(AllIcons.FileTypes.Java);
+                    else renderer.setIcon(AllIcons.FileTypes.Text);
                 }
             }
         }

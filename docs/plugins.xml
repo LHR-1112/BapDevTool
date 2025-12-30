@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+    <plugin
+            id="com.bap.dev.BapDevPlugin <id>"
+            version="1.2.5"
+            url="https://github.com/LHR-1112/BapDevTool/releases/download/v1.2.5/BapDevTool-1.2.5.zip">
+
+        <name>BapDevTool</name>
+
+        <idea-version since-build="223.0"/>
+
+        <vendor>LHR</vendor>
+
+        <description><![CDATA[
+      内部 Java / BAP 调试开发插件
+    ]]></description>
+
+    </plugin>
+</plugins>

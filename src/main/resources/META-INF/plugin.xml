@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.bap.dev.BapDevPlugin</id>
     <name>BapDevPlugin</name>
-    <version>1.2.3</version>
+    <version>1.2.5</version>
     <vendor email="2991747768@qq.com">LHR_1112</vendor>
     <resource-bundle>messages.PluginBundle</resource-bundle>
     <depends>com.intellij.modules.platform</depends>
