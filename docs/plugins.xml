@@ -12,7 +12,7 @@
         <vendor>LHR</vendor>
 
         <description><![CDATA[
-      内部 Java / BAP 调试开发插件
+      内部 BAP 调试开发插件
     ]]></description>
 
     </plugin>
