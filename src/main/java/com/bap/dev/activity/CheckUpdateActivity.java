@@ -121,7 +121,7 @@ public class CheckUpdateActivity implements StartupActivity {
         if (group == null) return;
 
         String content = String.format(
-                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>将自动下载并在重启后完成更新。",
+                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>",
                 latest.version, current
         );
 
@@ -148,7 +148,7 @@ public class CheckUpdateActivity implements StartupActivity {
         }));
 
 
-        n.addAction(NotificationAction.createSimple("GitHub 下载(备份)", () -> {
+        n.addAction(NotificationAction.createSimple("GitHub下载", () -> {
             if (latest.backupUrl != null && !latest.backupUrl.isBlank()) {
                 BrowserUtil.browse(latest.backupUrl);
             } else {
