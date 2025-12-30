@@ -36,7 +36,6 @@ public final class BapConnectionManager implements Disposable {
         boolean configChanged = !Objects.equals(uri, currentUri) ||
                 !Objects.equals(user, currentUser) ||
                 !Objects.equals(pwd, currentPwd);
-        System.out.println("BapConnectionManager: Config changed = " + configChanged);
 
         // 2. 检查当前客户端是否不可用 (假设 BapRpcClient 有 isConnected() 方法，如果没有请自行添加或仅判断 null)
         // 如果 BapRpcClient 没有 isConnected 方法，至少判断 activeClient == null
