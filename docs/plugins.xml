@@ -2,8 +2,8 @@
 <plugins>
     <plugin
             id="com.bap.dev.BapDevPlugin"
-            version="1.2.4"
-            url="https://github.com/LHR-1112/BapDevTool/releases/download/v1.2.4/BapDevTool-1.2.4.zip">
+            version="1.2.3"
+            url="https://github.com/LHR-1112/BapDevTool/releases/download/v1.2.3/BapDevTool-1.2.3.zip">
 
         <name>BapDevTool</name>
 
