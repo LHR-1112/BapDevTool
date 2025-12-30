@@ -20,6 +20,8 @@ import java.util.List;
 )
 public class BapSettingsState implements PersistentStateComponent<BapSettingsState> {
 
+    public String ignoredVersion = "";
+
     public boolean compileOnPublish = true;
     public boolean autoRefresh = false;
 

@@ -4,16 +4,12 @@
             id="com.bap.dev.BapDevPlugin"
             version="1.2.4"
             url="https://cdn.lhr1112.top/plugins/BapDevTool-1.2.4.zip">
-
+        <backup-url>https://github.com/LHR-1112/BapDevTool/releases/download/v1.2.4/BapDevTool-1.2.4.zip</backup-url>
         <name>BapDevTool</name>
-
         <idea-version since-build="223.0"/>
-
         <vendor>LHR</vendor>
-
         <description><![CDATA[
             内部 BAP 调试开发插件
         ]]></description>
-
     </plugin>
 </plugins>
