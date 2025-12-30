@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugins>
     <plugin
-            id="com.bap.dev.BapDevPlugin <id>"
+            id="com.bap.dev.BapDevPlugin"
             version="1.2.4"
             url="https://github.com/LHR-1112/BapDevTool/releases/download/v1.2.4/BapDevTool-1.2.4.zip">
 
@@ -12,8 +12,8 @@
         <vendor>LHR</vendor>
 
         <description><![CDATA[
-      内部 BAP 调试开发插件
-    ]]></description>
+            内部 BAP 调试开发插件
+        ]]></description>
 
     </plugin>
 </plugins>
