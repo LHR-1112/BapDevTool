@@ -2,11 +2,15 @@ package com.bap.dev.activity;
 
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.ide.BrowserUtil;
-import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.ide.plugins.*;
 import com.intellij.notification.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.options.ShowSettingsUtil;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.ui.Messages;
@@ -16,9 +20,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,26 +32,14 @@ import java.util.regex.Pattern;
 public class CheckUpdateActivity implements StartupActivity {
 
     private static final String PLUGIN_ID = "com.bap.dev.BapDevPlugin";
-
-    /**
-     * 指向你内部插件仓库的 plugins.xml（GitHub Pages / 内网都行）
-     * 你也可以放到设置里可配置，这里先写死。
-     */
     private static final String PLUGINS_XML_URL = "https://lhr-1112.github.io/BapDevTool/plugins.xml";
-
-    /**
-     * 防止每打开一个 Project 都弹一次（StartupActivity 是 per-project 的）
-     */
     private static final AtomicBoolean CHECKED_THIS_SESSION = new AtomicBoolean(false);
 
     @Override
     public void runActivity(@NotNull Project project) {
         BapSettingsState s = BapSettingsState.getInstance();
         if (!s.checkUpdateOnStartup) return;
-
-        // 每次启动 IDEA / 第一次打开项目才检查一次
         if (!CHECKED_THIS_SESSION.compareAndSet(false, true)) return;
-
         runUpdateCheck(project, false);
     }
 
@@ -64,31 +58,30 @@ public class CheckUpdateActivity implements StartupActivity {
         });
     }
 
+    // ... (checkForUpdates, showUpdateNotification, downloadAndInstall 方法保持不变，直接复用上文即可) ...
+    // 为节省篇幅，这里省略中间未修改的方法，请保留原样。
+    // 重点修改下面的 installPluginZipAfterRestart
+
     private static void checkForUpdates(@Nullable Project project, boolean isManual) throws Exception {
         PluginId id = PluginId.getId(PLUGIN_ID);
         var pluginDescriptor = PluginManagerCore.getPlugin(id);
 
         if (pluginDescriptor == null) {
-            String msg = "Error: 找不到插件描述信息! ID: " + PLUGIN_ID;
             if (isManual) {
                 ApplicationManager.getApplication().invokeLater(() ->
-                                Messages.showErrorDialog(project, msg, "Error"),
-                        ModalityState.any());
+                        Messages.showErrorDialog(project, "Error: 找不到插件描述信息! ID: " + PLUGIN_ID, "Error"), ModalityState.any());
             }
             return;
         }
 
         String currentVersion = pluginDescriptor.getVersion();
-
-        // 1) 从 plugins.xml 获取“最新版本 + 下载链接”
         String pluginsXml = HttpRequests.request(PLUGINS_XML_URL).readString();
         RepoEntry latest = parseRepoEntry(pluginsXml, PLUGIN_ID);
 
         if (latest == null || latest.version == null || latest.downloadUrl == null) {
             if (isManual) {
                 ApplicationManager.getApplication().invokeLater(() ->
-                                Messages.showErrorDialog(project, "无法从 plugins.xml 解析版本/下载地址", "Update Error"),
-                        ModalityState.any());
+                        Messages.showErrorDialog(project, "无法从 plugins.xml 解析版本/下载地址", "Update Error"), ModalityState.any());
             }
             return;
         }
@@ -99,7 +92,6 @@ public class CheckUpdateActivity implements StartupActivity {
         BapSettingsState s = BapSettingsState.getInstance();
         if (s.ignoredVersion != null && !s.ignoredVersion.isBlank()
                 && normalizeVersion(s.ignoredVersion).equals(cleanLatest)) {
-            // 用户选择忽略这个版本：直接不提示
             return;
         }
 
@@ -127,26 +119,10 @@ public class CheckUpdateActivity implements StartupActivity {
 
         Notification n = group.createNotification("Bap Plugin Update", content, NotificationType.INFORMATION);
 
-        // ✅ 立即更新（自动下载 + 安装 + 提示重启）
-        n.addAction(NotificationAction.createSimple("立即更新", () -> {
+        n.addAction(NotificationAction.createSimple("立即更新并重启", () -> {
             n.expire();
-            ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                try {
-                    File zip = downloadToTemp(latest.downloadUrl, "BapDevTool-" + latest.version + ".zip");
-                    installPluginZipAfterRestart(zip);
-                    ApplicationManager.getApplication().invokeLater(() ->
-                                    Messages.showInfoMessage(project,
-                                            "插件已下载并安排在重启后安装。\n请重启 IDEA 完成更新。", "Update Ready"),
-                            ModalityState.any());
-                } catch (Exception ex) {
-                    ApplicationManager.getApplication().invokeLater(() ->
-                                    Messages.showErrorDialog(project,
-                                            "自动更新失败: " + ex.getMessage(), "Update Error"),
-                            ModalityState.any());
-                }
-            });
+            downloadAndInstall(project, latest);
         }));
-
 
         n.addAction(NotificationAction.createSimple("GitHub下载", () -> {
             if (latest.backupUrl != null && !latest.backupUrl.isBlank()) {
@@ -156,7 +132,6 @@ public class CheckUpdateActivity implements StartupActivity {
             }
         }));
 
-        // ✅ 忽略此版本（以后不再提示这个版本）
         n.addAction(NotificationAction.createSimple("忽略此版本", () -> {
             BapSettingsState.getInstance().ignoredVersion = latest.version;
             n.expire();
@@ -165,12 +140,95 @@ public class CheckUpdateActivity implements StartupActivity {
         n.notify(project);
     }
 
+    private static void downloadAndInstall(@Nullable Project project, RepoEntry latest) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Plugin...", true) {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                try {
+                    indicator.setText("Downloading version " + latest.version + "...");
+                    String fileName = "BapDevPlugin-" + latest.version + ".zip";
+                    File zipFile = downloadToTemp(latest.downloadUrl, fileName);
+
+                    indicator.setText("Installing...");
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        try {
+                            installPluginZipAfterRestart(zipFile);
+
+                            int result = Messages.showYesNoDialog(project,
+                                    "插件更新已下载并准备就绪。\n需要重启 IDE 才能生效，是否立即重启？",
+                                    "Restart IDE",
+                                    Messages.getQuestionIcon());
+
+                            if (result == Messages.YES) {
+                                ApplicationManager.getApplication().restart();
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            Messages.showErrorDialog(project, "安装失败: " + e.getMessage(), "Update Error");
+                        }
+                    });
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    ApplicationManager.getApplication().invokeLater(() ->
+                            Messages.showErrorDialog(project, "下载失败: " + e.getMessage(), "Update Error"));
+                }
+            }
+        });
+    }
+
     /**
-     * 从 plugins.xml 中解析指定 pluginId 的 version 和 url
-     * 兼容 <plugin ... url="..."> 与 <download-url>...</download-url>
+     * 核心修改：全面适配新旧版 API
      */
+    private static void installPluginZipAfterRestart(File pluginZip) throws Exception {
+        Class<?> installer = Class.forName("com.intellij.ide.plugins.PluginInstaller");
+
+        // 1. 获取插件描述符
+        Path zipPath = pluginZip.toPath();
+        IdeaPluginDescriptor descriptor = PluginDescriptorLoader.loadDescriptorFromArtifact(zipPath, null);
+        if (descriptor == null) {
+            throw new IOException("无法解析插件描述符: " + pluginZip.getAbsolutePath());
+        }
+
+        // 2. 尝试查找已安装的旧路径
+        File oldFile = null;
+        Path oldPath = null;
+        IdeaPluginDescriptor installed = PluginManagerCore.getPlugin(descriptor.getPluginId());
+        if (installed != null) {
+            oldPath = installed.getPluginPath();
+            if (oldPath != null) oldFile = oldPath.toFile();
+        }
+
+        // --- 方案 A: 2024.1+ 新版 API (Path 参数) ---
+        // installAfterRestart(IdeaPluginDescriptor, Path, Path, boolean)
+        try {
+            Method m = installer.getMethod("installAfterRestart", IdeaPluginDescriptor.class, Path.class, Path.class, boolean.class);
+            m.invoke(null, descriptor, zipPath, oldPath, true);
+            return;
+        } catch (NoSuchMethodException ignored) {}
+
+        // --- 方案 B: 2020.3 - 2023.x 中间版本 API (File 参数, 4参数) ---
+        // installAfterRestart(File, boolean, File, IdeaPluginDescriptor)
+        try {
+            Method m = installer.getMethod("installAfterRestart", File.class, boolean.class, File.class, IdeaPluginDescriptor.class);
+            m.invoke(null, pluginZip, true, oldFile, descriptor);
+            return;
+        } catch (NoSuchMethodException ignored) {}
+
+        // --- 方案 C: 古老版本 (File 参数, 2参数) ---
+        // installAfterRestart(File, boolean)
+        try {
+            Method m = installer.getMethod("installAfterRestart", File.class, boolean.class);
+            m.invoke(null, pluginZip, true);
+            return;
+        } catch (NoSuchMethodException ignored) {}
+
+        throw new UnsupportedOperationException("当前 IDE 版本不支持 installAfterRestart 安装接口");
+    }
+
+    // ... (RepoEntry, parseRepoEntry, extractAttr, normalizeVersion, compareVersion, safeInt, downloadToTemp 保持不变) ...
+
     private static RepoEntry parseRepoEntry(String xml, String pluginId) {
-        // 1) 找到 <plugin ... id="xxx" ...> ... </plugin>
         Pattern block = Pattern.compile(
                 "<plugin\\b[^>]*\\bid\\s*=\\s*\"" + Pattern.quote(pluginId) + "\"[^>]*>.*?</plugin>",
                 Pattern.DOTALL);
@@ -178,29 +236,19 @@ public class CheckUpdateActivity implements StartupActivity {
         if (!m.find()) return null;
 
         String pluginBlock = m.group(0);
-
-        // version="x.y.z"
         String version = extractAttr(pluginBlock, "version");
-        // url="http..."
         String url = extractAttr(pluginBlock, "url");
-
         String backup = "https://github.com/LHR-1112/BapDevTool/releases/download/v" + version
                 + "/BapDevTool-" + version + ".zip";
 
-        // 或者 <download-url>...</download-url>
         if (url == null) {
             Pattern p = Pattern.compile("<download-url>\\s*([^<\\s]+)\\s*</download-url>");
             Matcher dm = p.matcher(pluginBlock);
             if (dm.find()) url = dm.group(1).trim();
         }
 
-        if (version == null) {
-            // 兜底：version 也可能在其它标签里（一般不会）
-            return null;
-        }
-        return new RepoEntry(version.trim(),
-                url == null ? null : url.trim(),
-                backup);
+        if (version == null) return null;
+        return new RepoEntry(version.trim(), url == null ? null : url.trim(), backup);
     }
 
     private static String extractAttr(String s, String attr) {
@@ -218,7 +266,6 @@ public class CheckUpdateActivity implements StartupActivity {
         String[] parts1 = v1.split("\\.");
         String[] parts2 = v2.split("\\.");
         int length = Math.max(parts1.length, parts2.length);
-
         for (int i = 0; i < length; i++) {
             int num1 = i < parts1.length ? safeInt(parts1[i]) : 0;
             int num2 = i < parts2.length ? safeInt(parts2[i]) : 0;
@@ -257,38 +304,10 @@ public class CheckUpdateActivity implements StartupActivity {
         return out;
     }
 
-    /**
-     * 使用 IDEA 的安装机制安排“重启后安装”
-     * 用反射调用，兼容不同 IDE 版本的 API 变动。
-     */
-    private static void installPluginZipAfterRestart(File pluginZip) throws Exception {
-        // 优先：PluginInstaller.installAfterRestart(File, boolean)
-        Class<?> installer = Class.forName("com.intellij.ide.plugins.PluginInstaller");
-
-        try {
-            Method m = installer.getMethod("installAfterRestart", File.class, boolean.class);
-            m.invoke(null, pluginZip, true);
-            return;
-        } catch (NoSuchMethodException ignored) {
-            // 某些版本方法签名不同，继续兜底
-        }
-
-        // 兜底：PluginInstaller.installAfterRestart(File)
-        try {
-            Method m = installer.getMethod("installAfterRestart", File.class);
-            m.invoke(null, pluginZip);
-            return;
-        } catch (NoSuchMethodException ignored) {
-            // 继续兜底
-        }
-
-        throw new UnsupportedOperationException("当前 IDE 版本不支持 installAfterRestart 安装接口");
-    }
-
     private static class RepoEntry {
         final String version;
-        final String downloadUrl; // 主更新（CDN/内部仓库）
-        final String backupUrl;   // 备份（GitHub）
+        final String downloadUrl;
+        final String backupUrl;
 
         RepoEntry(String version, String downloadUrl, String backupUrl) {
             this.version = version;
