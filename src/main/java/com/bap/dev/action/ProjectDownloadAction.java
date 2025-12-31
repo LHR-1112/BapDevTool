@@ -56,7 +56,6 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
     private static final String PREF_URI = "practicalTool.uri";
     private static final String PREF_USER = "practicalTool.user";
 
-    // 🔴 删除之前的构造函数 super(..., Icon)
     // 使用默认构造函数即可，元数据由 XML 提供
     public ProjectDownloadAction() {
         super();
