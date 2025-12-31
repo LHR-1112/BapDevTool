@@ -4,6 +4,7 @@ import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
@@ -54,24 +55,27 @@ public class UpdateAllAction extends AnAction {
 
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("notification.error_title")                   // "错误"
+            );
             return;
         }
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Preparing Update...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.UpdateAllAction.progress.preparing"), true) { // "Preparing Update..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setIndeterminate(true);
-                    indicator.setText("Refreshing module status...");
+                    indicator.setText(BapBundle.message("progress.refresh_module")); // "Refreshing module status..."
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     refresher.refreshModule(moduleRoot);
 
-                    indicator.setText("Collecting changes...");
+                    indicator.setText(BapBundle.message("progress.collect_changes")); // "Collecting changes..."
                     List<VirtualFile> changedFiles = collectChangedFiles(project, moduleRoot);
 
                     if (changedFiles.isEmpty()) {
-                        showInfo("没有检测到需要更新的文件 (M/A/D)。");
+                        showInfo(BapBundle.message("action.UpdateAllAction.info.no_changes")); // "没有检测到需要更新的文件 (M/A/D)。"
                         return;
                     }
 
@@ -83,14 +87,14 @@ public class UpdateAllAction extends AnAction {
 
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    showError("准备更新失败: " + ex.getMessage());
+                    showError(BapBundle.message("action.UpdateAllAction.error.prepare_failed", ex.getMessage())); // "准备更新失败: " + ex.getMessage()
                 }
             }
         });
     }
 
     private void startBatchUpdate(Project project, VirtualFile moduleRoot, List<VirtualFile> files) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Files...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.UpdateAllAction.progress.updating_title"), true) { // "Updating Files..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 // --- 🔴 修改：client 初始化为 null ---
@@ -106,14 +110,14 @@ public class UpdateAllAction extends AnAction {
                     String pwd = extractAttr(content, "Password");
                     String projectUuid = extractAttr(content, "Project");
 
-                    indicator.setText("Connecting...");
+                    indicator.setText(BapBundle.message("progress.connecting")); // "Connecting..."
                     client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
 
                     int count = 0;
                     for (VirtualFile file : files) {
                         if (indicator.isCanceled()) break;
                         indicator.setFraction((double) ++count / files.size());
-                        indicator.setText("Updating " + file.getName() + "...");
+                        indicator.setText(BapBundle.message("action.UpdateAllAction.progress.updating_file", file.getName())); // "Updating " + file.getName() + "..."
 
                         try {
                             boolean result;
@@ -133,12 +137,14 @@ public class UpdateAllAction extends AnAction {
                         }
                     }
 
-                    String msg = String.format("更新完成。\n成功: %d\n失败/跳过: %d", successCount, failCount);
+                    String msg = BapBundle.message("action.UpdateAllAction.notification.result_msg", successCount, failCount); // String.format("更新完成。\n成功: %d\n失败/跳过: %d", ...)
                     NotificationType type = failCount > 0 ? NotificationType.WARNING : NotificationType.INFORMATION;
-                    sendNotification(project, "Update All Result", msg, type);
+                    sendNotification(project,
+                            BapBundle.message("action.UpdateAllAction.notification.title"), // "Update All Result"
+                            msg, type);
 
                 } catch (Exception ex) {
-                    showError("批量更新中断: " + ex.getMessage());
+                    showError(BapBundle.message("action.UpdateAllAction.error.batch_interrupt", ex.getMessage())); // "批量更新中断: " + ex.getMessage()
                 } finally {
                     client.shutdown();
                     ApplicationManager.getApplication().invokeLater(() -> {
@@ -255,8 +261,7 @@ public class UpdateAllAction extends AnAction {
     }
 
     private boolean showConfirmDialog(Project project, List<VirtualFile> files) {
-        StringBuilder sb = new StringBuilder("即将执行【Update All】操作。\n");
-        sb.append("这将会把以下本地文件重置为云端版本 (本地修改将被覆盖/删除)：\n\n");
+        StringBuilder sb = new StringBuilder(BapBundle.message("action.UpdateAllAction.dialog.confirm_msg")); // "即将执行【Update All】操作..."
         int count = 0;
         for (VirtualFile f : files) {
             BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(f);
@@ -266,11 +271,15 @@ public class UpdateAllAction extends AnAction {
             if (status == BapFileStatus.DELETED_LOCALLY) symbol = "[D 还原]";
             sb.append(symbol).append(" ").append(f.getName()).append("\n");
             if (++count > 15) {
-                sb.append("... 等 ").append(files.size()).append(" 个文件");
+                sb.append(BapBundle.message("action.UpdateAllAction.dialog.confirm_more", files.size())); // "... 等 " + files.size() + " 个文件"
                 break;
             }
         }
-        return Messages.showOkCancelDialog(project, sb.toString(), "Confirm Update All", "Update (Overwrite)", "Cancel", Messages.getWarningIcon()) == Messages.OK;
+        return Messages.showOkCancelDialog(project, sb.toString(),
+                BapBundle.message("action.UpdateAllAction.dialog.confirm_title"),   // "Confirm Update All"
+                BapBundle.message("action.UpdateAllAction.button.update_overwrite"),// "Update (Overwrite)"
+                BapBundle.message("button.cancel"),                                 // "Cancel" (common)
+                Messages.getWarningIcon()) == Messages.OK;
     }
 
     private VirtualFile findModuleRoot(VirtualFile current) {
