@@ -112,9 +112,16 @@ public class CheckUpdateActivity implements StartupActivity {
                 .getNotificationGroup("Cloud Project Download");
         if (group == null) return;
 
+        String notesHtml = "";
+        if (latest.changeNotes != null && !latest.changeNotes.isBlank()) {
+            String text = latest.changeNotes.trim();
+            text = text.length() > 800 ? text.substring(0, 800) + "\n…" : text; // 防止通知太长
+            notesHtml = "<br/><br/><b>更新内容：</b><br/>" + escapeHtml(text).replace("\n", "<br/>");
+        }
+
         String content = String.format(
-                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>",
-                latest.version, current
+                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/> %s <br/>",
+                latest.version, current, notesHtml
         );
 
         Notification n = group.createNotification("Bap Plugin Update", content, NotificationType.INFORMATION);
@@ -138,6 +145,14 @@ public class CheckUpdateActivity implements StartupActivity {
         }));
 
         n.notify(project);
+    }
+
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     private static void downloadAndInstall(@Nullable Project project, RepoEntry latest) {
@@ -241,6 +256,9 @@ public class CheckUpdateActivity implements StartupActivity {
         String backup = "https://github.com/LHR-1112/BapDevTool/releases/download/v" + version
                 + "/BapDevTool-" + version + ".zip";
 
+
+        String changeNotes = extractTagText(pluginBlock, "change-notes");
+
         if (url == null) {
             Pattern p = Pattern.compile("<download-url>\\s*([^<\\s]+)\\s*</download-url>");
             Matcher dm = p.matcher(pluginBlock);
@@ -248,7 +266,18 @@ public class CheckUpdateActivity implements StartupActivity {
         }
 
         if (version == null) return null;
-        return new RepoEntry(version.trim(), url == null ? null : url.trim(), backup);
+        return new RepoEntry(version.trim(), url == null ? null : url.trim(), backup, changeNotes);
+    }
+
+    private static String extractTagText(String block, String tag) {
+        Pattern p = Pattern.compile("<" + Pattern.quote(tag) + ">([\\s\\S]*?)</" + Pattern.quote(tag) + ">");
+        Matcher m = p.matcher(block);
+        if (!m.find()) return null;
+        String raw = m.group(1);
+        // 去掉 CDATA 外壳（有就剥）
+        raw = raw.replaceFirst("^\\s*<!\\[CDATA\\[", "");
+        raw = raw.replaceFirst("]]>\\s*$", "");
+        return raw;
     }
 
     private static String extractAttr(String s, String attr) {
@@ -308,11 +337,13 @@ public class CheckUpdateActivity implements StartupActivity {
         final String version;
         final String downloadUrl;
         final String backupUrl;
+        final String changeNotes;
 
-        RepoEntry(String version, String downloadUrl, String backupUrl) {
+        RepoEntry(String version, String downloadUrl, String backupUrl, String changeNotes) {
             this.version = version;
             this.downloadUrl = downloadUrl;
             this.backupUrl = backupUrl;
+            this.changeNotes = changeNotes;
         }
     }
 }

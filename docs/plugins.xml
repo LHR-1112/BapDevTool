@@ -9,7 +9,13 @@
         <idea-version since-build="223.0"/>
         <vendor>LHR</vendor>
         <description><![CDATA[
-            基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
+基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
+        <change-notes><![CDATA[
+* **新特性**：BapChanges界面，在工程根节点的右侧加上一些工程级的操作
+* **新特性**：添加一键更新插件并重启的能力，同时保留github下载的入口
+* **特性修改**：修改项目历史的查询逻辑，增加资源文件历史的展示
+* **特性修改**：修改文件历史的查询逻辑，增加资源文件历史的展示
+    ]]></change-notes>
     </plugin>
 </plugins>
