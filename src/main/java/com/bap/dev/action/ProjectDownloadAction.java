@@ -61,7 +61,6 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
         super();
     }
 
-    // 3. 必须覆盖此方法 (2022.3+)
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
         return ActionUpdateThread.EDT;
