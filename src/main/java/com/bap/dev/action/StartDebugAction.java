@@ -4,6 +4,7 @@ import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import bap.java.CJavaDebuggerDto;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
@@ -78,7 +79,10 @@ public class StartDebugAction extends AnAction {
         // 1. 获取连接配置 (配置通常不会变，可以在这里获取一次)
         String[] config = findConfig(vFile);
         if (config == null) {
-            Messages.showWarningDialog("在当前模块路径下未找到 .develop 配置文件。", "配置丢失");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("notification.error_title")
+            );
             return;
         }
         String uri = config[0];
@@ -118,7 +122,7 @@ public class StartDebugAction extends AnAction {
         });
 
         if (classInfo == null) {
-            printError(console, "Error: Unable to parse Java file. Please check the file syntax.");
+            printError(console, BapBundle.message("action.StartDebugAction.error.parse_java")); // "Error: Unable to parse..."
             return;
         }
 
@@ -145,16 +149,16 @@ public class StartDebugAction extends AnAction {
 
     private void executeDebug(Project project, ConsoleView console, String className, String debugPackageName, String code, String uri, String user, String pwd) {
         console.clear();
-        console.print("Preparing to debug class [" + className + "] in package [" + debugPackageName + "]...\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+        console.print(BapBundle.message("action.StartDebugAction.console.preparing", className, debugPackageName), ConsoleViewContentType.SYSTEM_OUTPUT);
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Debugging " + className, true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.StartDebugAction.progress.debugging", className), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = new BapRpcClient();
                 try {
-                    indicator.setText("Connecting...");
+                    indicator.setText(BapBundle.message("progress.connecting")); // "Connecting..."
                     client.connect(uri, user, pwd);
-                    console.print("Connected to " + uri + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+                    console.print(BapBundle.message("action.StartDebugAction.console.connected", uri), ConsoleViewContentType.SYSTEM_OUTPUT);
 
                     CJavaCode javaCode = new CJavaCode();
                     javaCode.setJavaPackage(debugPackageName);
@@ -163,13 +167,13 @@ public class StartDebugAction extends AnAction {
                     javaCode.setUuid(UUID.randomUUID().toString().replace("-", "_"));
                     javaCode.setCode(code);
 
-                    indicator.setText("Executing...");
-                    console.print("Uploading and Executing...\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+                    indicator.setText(BapBundle.message("action.StartDebugAction.progress.executing")); // "Executing..."
+                    console.print(BapBundle.message("action.StartDebugAction.console.upload_execute"), ConsoleViewContentType.SYSTEM_OUTPUT);
 
                     String debugKey = client.getService().startDebugJava(javaCode, new URI(uri));
 
                     if (debugKey == null) {
-                        printError(console, "Server returned null debugKey.");
+                        printError(console, BapBundle.message("action.StartDebugAction.error.null_key"));
                         return;
                     }
 
@@ -201,7 +205,7 @@ public class StartDebugAction extends AnAction {
                     printResult(console, debugKey, debuggerDto, isException, result, resultText, traces);
 
                 } catch (Exception ex) {
-                    printError(console, "Execution Failed: " + ex.getMessage());
+                    printError(console, BapBundle.message("action.StartDebugAction.error.execution_failed", ex.getMessage()));
                     ex.printStackTrace();
                 } finally {
                     client.shutdown();
@@ -211,7 +215,7 @@ public class StartDebugAction extends AnAction {
     }
 
     private ConsoleView getOrCreateConsole(Project project) {
-        final String consoleTitle = "Cloud Debug";
+        final String consoleTitle = BapBundle.message("action.StartDebugAction.title.cloud_debug"); // "Cloud Debug"
         RunContentManager contentManager = ExecutionManager.getInstance(project).getContentManager();
 
         for (RunContentDescriptor descriptor : contentManager.getAllDescriptors()) {
@@ -286,18 +290,27 @@ public class StartDebugAction extends AnAction {
 
     private void printResult(ConsoleView console, String debugKey, CJavaDebuggerDto dto, boolean isException, Object result, String resultText, List<String> traces) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            console.print("\n---------------- EXECUTION FINISHED ----------------\n", ConsoleViewContentType.LOG_INFO_OUTPUT);
-            console.print("DebugKey: " + debugKey + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
-            console.print("IsException: " + isException + "\n", isException ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
-            console.print("Result Object: " + result + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
-            console.print("Result Text: " + resultText + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
+            console.print(BapBundle.message("action.StartDebugAction.console.finish_header"), ConsoleViewContentType.LOG_INFO_OUTPUT);
+
+            console.print(BapBundle.message("action.StartDebugAction.label.debug_key"), ConsoleViewContentType.NORMAL_OUTPUT);
+            console.print(debugKey + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
+
+            console.print(BapBundle.message("action.StartDebugAction.label.is_exception"), isException ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
+            console.print(isException + "\n", isException ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
+
+            console.print(BapBundle.message("action.StartDebugAction.label.result_obj"), ConsoleViewContentType.NORMAL_OUTPUT);
+            console.print(result + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
+
+            console.print(BapBundle.message("action.StartDebugAction.label.result_text"), ConsoleViewContentType.NORMAL_OUTPUT);
+            console.print(resultText + "\n", ConsoleViewContentType.NORMAL_OUTPUT);
 
             if (traces != null && !traces.isEmpty()) {
-                console.print("\n--- Remote Traces ---\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+                console.print(BapBundle.message("action.StartDebugAction.console.remote_traces"), ConsoleViewContentType.SYSTEM_OUTPUT);
                 for (String line : traces) {
                     printColoredLog(console, line);
                 }
             }
+            // Footer line can reuse header or keep simple separator
             console.print("----------------------------------------------------\n", ConsoleViewContentType.LOG_INFO_OUTPUT);
         });
     }
@@ -341,7 +354,11 @@ public class StartDebugAction extends AnAction {
         private final ConsoleView consoleView;
 
         public RerunAction(ConsoleView consoleView) {
-            super("Rerun", "Rerun cloud debug", AllIcons.Actions.Restart);
+            super(
+                    BapBundle.message("action.StartDebugAction.action.rerun"),      // "Rerun"
+                    BapBundle.message("action.StartDebugAction.action.rerun.desc"), // "Rerun cloud debug"
+                    AllIcons.Actions.Restart
+            );
             this.consoleView = consoleView;
         }
 
