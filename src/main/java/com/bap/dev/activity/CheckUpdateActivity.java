@@ -96,9 +96,8 @@ public class CheckUpdateActivity implements StartupActivity {
         }
 
         if (compareVersion(cleanLatest, cleanCurrent) > 0) {
-            boolean manual = isManual;
             ApplicationManager.getApplication().invokeLater(
-                    () -> showUpdateUi(project, currentVersion, latest.version, latest, manual),
+                    () -> showUpdateUi(project, currentVersion, latest.version, latest, isManual),
                     ModalityState.any()
             );
         } else if (isManual) {
@@ -117,7 +116,7 @@ public class CheckUpdateActivity implements StartupActivity {
             showUpdateModal(project, html, latest, latestEntry);
         } else {
             // ✅ 启动自动检查：右下角通知
-            showUpdateNotification(project, html, latestEntry);
+            showUpdateNotification(project, current, latestEntry);
         }
     }
 
@@ -147,7 +146,7 @@ public class CheckUpdateActivity implements StartupActivity {
                 "<html>" + htmlContent + "</html>",
                 "Bap Plugin Update",
                 options,
-                1,
+                -1,
                 Messages.getInformationIcon()
         );
 
@@ -188,9 +187,9 @@ public class CheckUpdateActivity implements StartupActivity {
 
         Notification n = group.createNotification("Bap Plugin Update", content, NotificationType.INFORMATION);
 
-        n.addAction(NotificationAction.createSimple("立即更新并重启", () -> {
+        n.addAction(NotificationAction.createSimple("忽略此版本", () -> {
+            BapSettingsState.getInstance().ignoredVersion = latest.version;
             n.expire();
-            downloadAndInstall(project, latest);
         }));
 
         n.addAction(NotificationAction.createSimple("GitHub下载", () -> {
@@ -201,9 +200,9 @@ public class CheckUpdateActivity implements StartupActivity {
             }
         }));
 
-        n.addAction(NotificationAction.createSimple("忽略此版本", () -> {
-            BapSettingsState.getInstance().ignoredVersion = latest.version;
+        n.addAction(NotificationAction.createSimple("立即更新并重启", () -> {
             n.expire();
+            downloadAndInstall(project, latest);
         }));
 
         n.notify(project);
