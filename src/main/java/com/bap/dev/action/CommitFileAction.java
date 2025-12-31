@@ -2,6 +2,7 @@ package com.bap.dev.action;
 
 import bap.java.*;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
@@ -60,7 +61,10 @@ public class CommitFileAction extends AnAction {
 
         VirtualFile moduleRoot = findModuleRoot(selectedFiles[0]);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("notification.error_title")
+                    );
             return;
         }
 
@@ -93,7 +97,7 @@ public class CommitFileAction extends AnAction {
         if (dialog.showAndGet()) {
             String comments = dialog.getComment();
 
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing files...", true) {
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.CommitFileAction.progress.committing"), true) {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     indicator.setIndeterminate(true);
@@ -101,7 +105,7 @@ public class CommitFileAction extends AnAction {
                         commitWithPackage(project, moduleRoot, selectedFiles, comments);
                     } catch (Exception ex) {
                         ex.printStackTrace();
-                        showError("提交失败: " + ex.getMessage());
+                        showError(BapBundle.message("action.CommitFileAction.error.failed", ex.getMessage()));
                     }
                 }
             });
@@ -297,7 +301,7 @@ public class CommitFileAction extends AnAction {
             // 🔴 新增：设置自动聚焦
             project.putUserData(BapChangesTreePanel.LAST_BAP_MODULE_ROOT, moduleRoot);
 
-            sendNotification(project, "提交成功", "已提交 " + files.length + " 个文件。");
+            sendNotification(project, BapBundle.message("action.CommitFileAction.notification.success_title"), BapBundle.message("action.CommitFileAction.notification.success_message", files.length));
             project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
         });
     }
@@ -380,7 +384,7 @@ public class CommitFileAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Commit Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("action.CommitFileAction.notification.commit_error_title")));
     }
 
     private void sendNotification(Project project, String title, String content) {
@@ -413,8 +417,8 @@ public class CommitFileAction extends AnAction {
             this.files = files;
             this.targetUri = targetUri;
             this.targetProject = targetProject;
-            setTitle("Commit Selected Files");
-            setOKButtonText("Commit");
+            setTitle(BapBundle.message("action.CommitFileAction.dialog.title"));
+            setOKButtonText(BapBundle.message("action.CommitFileAction.button.commit"));
             init();
         }
 
@@ -425,10 +429,10 @@ public class CommitFileAction extends AnAction {
 
             // 0. 顶部：服务器和工程信息 (新增)
             JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 5));
-            infoPanel.setBorder(BorderFactory.createTitledBorder("Target Environment"));
+            infoPanel.setBorder(BorderFactory.createTitledBorder(BapBundle.message("action.CommitFileAction.panel.target_env")));
 
-            JLabel uriLabel = new JLabel("Server: " + targetUri);
-            JLabel projLabel = new JLabel("Project: " + targetProject);
+            JLabel uriLabel = new JLabel(BapBundle.message("action.CommitFileAction.info.server", targetUri));
+            JLabel projLabel = new JLabel(BapBundle.message("action.CommitFileAction.info.project", targetProject));
 
             infoPanel.add(uriLabel);
             infoPanel.add(projLabel);
@@ -440,13 +444,13 @@ public class CommitFileAction extends AnAction {
             fileListArea.setBackground(null);
             fileListArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 
-            JLabel fileLabel = new JLabel("Files to commit (" + files.size() + "):");
+            JLabel fileLabel = new JLabel(BapBundle.message("action.CommitFileAction.label.files_to_commit", files.size()));
             JPanel filePanel = new JPanel(new BorderLayout(0, 5));
             filePanel.add(fileLabel, BorderLayout.NORTH);
             filePanel.add(new JBScrollPane(fileListArea), BorderLayout.CENTER);
 
             // 2. 底部：注释输入
-            JLabel commentLabel = new JLabel("Commit Message:");
+            JLabel commentLabel = new JLabel(BapBundle.message("action.CommitFileAction.form.commit_message"));
             commentArea = new JBTextArea(4, 50);
             commentArea.setLineWrap(true);
             commentArea.setWrapStyleWord(true);
