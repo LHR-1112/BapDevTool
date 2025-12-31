@@ -24,7 +24,7 @@ public class RelocateProjectAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"), // "未找到模块配置文件 (.develop)。"
+                    BapBundle.message("warning.no_develop_config"), // "未找到模块配置文件 (.develop)。"
                     BapBundle.message("notification.error_title")      // "无法刷新"
             );
             return;

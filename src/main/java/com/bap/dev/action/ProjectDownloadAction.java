@@ -137,7 +137,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                                         new String[]{
                                                 BapBundle.message("action.ProjectDownloadAction.button.add"), // "添加到当前项目"
                                                 BapBundle.message("action.ProjectDownloadAction.button.open"), // "作为独立项目打开"
-                                                BapBundle.message("action.ProjectDownloadAction.button.cancel") // "取消"
+                                                BapBundle.message("button.cancel") // "取消"
                                         },
                                         0,
                                         Messages.getQuestionIcon());

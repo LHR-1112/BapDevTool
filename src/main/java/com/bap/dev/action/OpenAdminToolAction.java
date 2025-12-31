@@ -25,7 +25,7 @@ public class OpenAdminToolAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("warning.no_develop_config"),
                     BapBundle.message("notification.error_title")
             );
             return;

@@ -28,7 +28,7 @@ public class RefreshProjectAction extends AnAction {
         VirtualFile moduleRoot = BapUtils.findModuleRoot(selectedFile);
 
         if (moduleRoot != null) {
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.RefreshProjectAction.progress.refreshing"), true) { // "Refreshing Bap Module..."
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.refresh_module"), true) { // "Refreshing Bap Module..."
                 //                @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     // 🔴 修改：传入 false，表示这是手动操作，需要弹窗报错
@@ -37,7 +37,7 @@ public class RefreshProjectAction extends AnAction {
             });
         } else {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"), // "未找到模块配置文件 (.develop)。"
+                    BapBundle.message("warning.no_develop_config"), // "未找到模块配置文件 (.develop)。"
                     BapBundle.message("action.RefreshProjectAction.title.cannot_refresh")      // "无法刷新"
             );
         }

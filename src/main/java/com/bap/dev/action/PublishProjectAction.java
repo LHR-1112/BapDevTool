@@ -40,7 +40,7 @@ public class PublishProjectAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件..."
+                    BapBundle.message("warning.no_develop_config"), // "未找到 .develop 配置文件..."
                     BapBundle.message("action.PublishProjectAction.title.cannot_publish")       // "无法发布"
             );
             return;
@@ -66,12 +66,12 @@ public class PublishProjectAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError(BapBundle.message("action.PublishProjectAction.error.read_config_prefix", e.getMessage())); // "读取配置失败: " + e.getMessage()
+            showError(BapBundle.message("error.read_config", e.getMessage())); // "读取配置失败: " + e.getMessage()
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError(BapBundle.message("action.PublishProjectAction.error.config_incomplete")); // "配置文件信息不全，无法发布。"
+            showError(BapBundle.message("error.config_incomplete")); // "配置文件信息不全，无法发布。"
             return;
         }
 
@@ -149,7 +149,7 @@ public class PublishProjectAction extends AnAction {
     private void showError(String msg) {
         ApplicationManager.getApplication().invokeLater(() ->
                 // 修改11: Error Dialog Title
-                Messages.showErrorDialog(msg, BapBundle.message("action.PublishProjectAction.dialog.error_title"))); // "Publish Error"
+                Messages.showErrorDialog(msg, BapBundle.message("title.publish_error"))); // "Publish Error"
     }
 
     private void sendNotification(Project project, String title, String content) {

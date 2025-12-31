@@ -49,7 +49,7 @@ public class CompareJavaCodeAction extends AnAction {
         // 2. 向上查找模块根目录
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog(BapBundle.message("error.develop_not_found"), BapBundle.message("notification.error_title"));
+            Messages.showWarningDialog(BapBundle.message("warning.no_develop_config"), BapBundle.message("notification.error_title"));
             return;
         }
 
@@ -127,12 +127,12 @@ public class CompareJavaCodeAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.read_config", e.getMessage()));
+            showError(project, BapBundle.message("error.read_config", e.getMessage()));
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.config_incomplete"));
+            showError(project, BapBundle.message("error.config_incomplete"));
             return;
         }
 
@@ -160,7 +160,7 @@ public class CompareJavaCodeAction extends AnAction {
             });
 
         } catch (Exception e) {
-            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.rpc_failed", e.getMessage()));
+            showError(project, BapBundle.message("error.rpc_failed", e.getMessage()));
         } finally {
             client.shutdown();
         }

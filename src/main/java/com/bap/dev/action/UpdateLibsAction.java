@@ -39,7 +39,7 @@ public class UpdateLibsAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("warning.no_develop_config"), // "未找到 .develop 配置文件。"
                     BapBundle.message("notification.error_title")   // "错误"
             );
             return;
@@ -123,7 +123,7 @@ public class UpdateLibsAction extends AnAction {
     private void showError(String msg) {
         ApplicationManager.getApplication().invokeLater(() ->
                 // 修改9: Error Dialog Title
-                Messages.showErrorDialog(msg, BapBundle.message("action.UpdateLibsAction.title.error"))); // "Update Libs Error"
+                Messages.showErrorDialog(msg, BapBundle.message("title.update_error"))); // "Update Libs Error"
     }
 
     private void sendNotification(Project project, String title, String content) {

@@ -45,7 +45,7 @@ public class ShowHistoryAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("warning.no_develop_config"), // "未找到 .develop 配置文件。"
                     BapBundle.message("notification.error_title")                     // "错误"
             );
             return;
@@ -168,7 +168,7 @@ public class ShowHistoryAction extends AnAction {
 
     private void showError(String msg) {
         ApplicationManager.getApplication().invokeLater(() ->
-                Messages.showErrorDialog(msg, BapBundle.message("action.ShowHistoryAction.title.history_error"))); // "历史记录错误"
+                Messages.showErrorDialog(msg, BapBundle.message("title.history_error"))); // "历史记录错误"
     }
 
     @Override

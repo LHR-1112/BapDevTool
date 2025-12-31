@@ -80,7 +80,7 @@ public class StartDebugAction extends AnAction {
         String[] config = findConfig(vFile);
         if (config == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("warning.no_develop_config"),
                     BapBundle.message("notification.error_title")
             );
             return;

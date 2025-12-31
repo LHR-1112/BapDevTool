@@ -61,7 +61,7 @@ public class CommitAllAction extends AnAction {
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
             Messages.showWarningDialog(
-                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("warning.no_develop_config"),
                     BapBundle.message("notification.error_title")
             );
             return;
@@ -72,11 +72,11 @@ public class CommitAllAction extends AnAction {
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setIndeterminate(true);
-                    indicator.setText(BapBundle.message("action.CommitAllAction.progress.refresh_module"));
+                    indicator.setText(BapBundle.message("progress.refresh_module"));
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     refresher.refreshModule(moduleRoot);
 
-                    indicator.setText(BapBundle.message("action.CommitAllAction.progress.collect_changes"));
+                    indicator.setText(BapBundle.message("progress.collect_changes"));
                     List<VirtualFile> changedFiles = collectChangedFiles(project, moduleRoot);
 
                     if (changedFiles.isEmpty()) {
@@ -137,7 +137,7 @@ public class CommitAllAction extends AnAction {
     }
 
     private void startBatchCommit(Project project, VirtualFile moduleRoot, List<VirtualFile> files, String comments) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.CommitAllAction.progress.committing"), true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.committing"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = null;
@@ -362,11 +362,11 @@ public class CommitAllAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Commit Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("title.commit_error")));
     }
 
     private void showInfo(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, "Commit All"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, BapBundle.message("action.CommitAllAction.action.short_name")));
     }
 
     private void sendNotification(Project project, String title, String content) {
@@ -471,10 +471,10 @@ public class CommitAllAction extends AnAction {
 
             // 0. 顶部：服务器和工程信息
             JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 5));
-            infoPanel.setBorder(BorderFactory.createTitledBorder(BapBundle.message("action.CommitAllAction.panel.target_env")));
+            infoPanel.setBorder(BorderFactory.createTitledBorder(BapBundle.message("label.target_env")));
 
-            JLabel uriLabel = new JLabel(BapBundle.message("action.CommitAllAction.info.server") + targetUri);
-            JLabel projLabel = new JLabel(BapBundle.message("action.CommitAllAction.info.project") + targetProject);
+            JLabel uriLabel = new JLabel(BapBundle.message("label.server") + targetUri);
+            JLabel projLabel = new JLabel(BapBundle.message("label.project") + targetProject);
 
             infoPanel.add(uriLabel);
             infoPanel.add(projLabel);
@@ -497,7 +497,7 @@ public class CommitAllAction extends AnAction {
             filePanel.add(new JBScrollPane(fileListArea), BorderLayout.CENTER);
 
             // 2. 下半部分：注释输入
-            JLabel commentLabel = new JLabel(BapBundle.message("action.CommitAllAction.form.commit_message"));
+            JLabel commentLabel = new JLabel(BapBundle.message("label.commit_message"));
             commentArea = new JBTextArea(4, 50);
             commentArea.setLineWrap(true);
             commentArea.setWrapStyleWord(true);
