@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaConst;
 import bap.md.ver.VersionNode;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.ui.HistoryListDialog;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -43,7 +44,10 @@ public class ShowHistoryAction extends AnAction {
         FileDocumentManager.getInstance().saveAllDocuments();
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("notification.error_title")                     // "错误"
+            );
             return;
         }
 
@@ -51,12 +55,15 @@ public class ShowHistoryAction extends AnAction {
         String remoteKey = resolveRemoteKey(project, moduleRoot, selectedFile);
 
         if (remoteKey == null) {
-            Messages.showWarningDialog("无法解析该文件的云端路径。\nJava文件需正确配置包名，资源文件需位于 src/res 目录下。", "不支持的文件");
+            Messages.showWarningDialog(
+                    BapBundle.message("action.ShowHistoryAction.warning.resolve_failed"), // "无法解析该文件的云端路径..."
+                    BapBundle.message("action.ShowHistoryAction.title.unsupported")       // "不支持的文件"
+            );
             return;
         }
 
         // 3. 启动后台任务获取历史列表
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Querying File History...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.ShowHistoryAction.progress.querying"), true) { // "Querying File History..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
@@ -100,12 +107,12 @@ public class ShowHistoryAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError("读取配置失败: " + e.getMessage());
+            showError(BapBundle.message("error.read_config", e.getMessage())); // "读取配置失败: " + e.getMessage()
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError("配置文件信息不全");
+            showError(BapBundle.message("error.config_incomplete")); // "配置文件信息不全"
             return;
         }
 
@@ -123,7 +130,10 @@ public class ShowHistoryAction extends AnAction {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (historyList == null || historyList.isEmpty()) {
-                    Messages.showInfoMessage("未找到该文件的云端历史记录。", "无记录");
+                    Messages.showInfoMessage(
+                            BapBundle.message("action.ShowHistoryAction.info.no_history"), // "未找到该文件的云端历史记录。"
+                            BapBundle.message("action.ShowHistoryAction.title.no_records") // "无记录"
+                    );
                 } else {
                     // 弹出列表对话框 (复用 HistoryListDialog)
                     new HistoryListDialog(project, localFile, historyList, fUri, fUser, fPwd).show();
@@ -132,7 +142,7 @@ public class ShowHistoryAction extends AnAction {
 
         } catch (Exception e) {
             e.printStackTrace();
-            showError("查询历史失败: " + e.getMessage());
+            showError(BapBundle.message("action.ShowHistoryAction.error.query_failed", e.getMessage())); // "查询历史失败: " + e.getMessage()
         } finally {
             client.shutdown();
         }
@@ -157,7 +167,8 @@ public class ShowHistoryAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "History Error"));
+        ApplicationManager.getApplication().invokeLater(() ->
+                Messages.showErrorDialog(msg, BapBundle.message("action.ShowHistoryAction.title.history_error"))); // "历史记录错误"
     }
 
     @Override
