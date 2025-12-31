@@ -299,11 +299,11 @@ public class UpdateAllAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Update Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("title.update_error")));
     }
 
     private void showInfo(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, "Update All"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showInfoMessage(msg, BapBundle.message("action.UpdateAllAction.title.info")));
     }
 
     private void sendNotification(Project project, String title, String content, NotificationType type) {

@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
@@ -54,12 +55,15 @@ public class UpdateFileAction extends AnAction {
         VirtualFile firstFile = selectedFiles[0];
         VirtualFile moduleRoot = findModuleRoot(firstFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("notification.error_title")   // "错误"
+            );
             return;
         }
 
         // 2. 启动后台批量任务
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Files from Cloud...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.UpdateFileAction.progress.title"), true) { // "Updating Files from Cloud..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(false);
@@ -73,7 +77,7 @@ public class UpdateFileAction extends AnAction {
 
                     // 更新进度条
                     indicator.setFraction((double) (i + 1) / total);
-                    indicator.setText("Updating " + file.getName() + " (" + (i + 1) + "/" + total + ")...");
+                    indicator.setText(BapBundle.message("action.UpdateFileAction.progress.text", file.getName(), (i + 1), total)); // "Updating " + file.getName() + " (" + (i + 1) + "/" + total + ")..."
 
                     if (file.isDirectory()) continue; // 跳过文件夹
 
@@ -107,9 +111,11 @@ public class UpdateFileAction extends AnAction {
                         FileStatusManager.getInstance(project).fileStatusesChanged();
                         project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
 
-                        String msg = "批量更新完成。成功: " + finalSuccess + ", 失败: " + finalFail;
+                        String msg = BapBundle.message("action.UpdateFileAction.notification.finish_msg", finalSuccess, finalFail); // "批量更新完成。成功: " + finalSuccess + ", 失败: " + finalFail
                         NotificationType type = finalFail > 0 ? NotificationType.WARNING : NotificationType.INFORMATION;
-                        sendNotification(project, "Update Result", msg, type);
+                        sendNotification(project,
+                                BapBundle.message("action.UpdateFileAction.notification.title"), // "Update Result"
+                                msg, type);
                     });
                 }
             }
@@ -119,7 +125,7 @@ public class UpdateFileAction extends AnAction {
     // --- 处理资源文件 (保持上次的修复版) ---
     private void updateResourceFile(Project project, VirtualFile moduleRoot, VirtualFile file) throws Exception {
         String relativePath = getResourceRelativePath(moduleRoot, file);
-        if (relativePath == null) throw new Exception("无法计算资源路径");
+        if (relativePath == null) throw new Exception(BapBundle.message("action.UpdateFileAction.error.calc_path")); // "无法计算资源路径"
 
         // --- 🔴 修改开始：手动读取配置并使用 BapConnectionManager ---
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
@@ -166,7 +172,7 @@ public class UpdateFileAction extends AnAction {
     // --- 处理 Java 文件 (保持不变) ---
     private void updateJavaFile(Project project, VirtualFile moduleRoot, VirtualFile file) throws Exception {
         String fullClassName = resolveClassName(project, file);
-        if (fullClassName == null) throw new Exception("无法解析类名");
+        if (fullClassName == null) throw new Exception(BapBundle.message("action.UpdateFileAction.error.resolve_class")); // "无法解析类名"
 
         // --- 🔴 修改开始：手动读取配置并使用 BapConnectionManager ---
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
@@ -223,7 +229,7 @@ public class UpdateFileAction extends AnAction {
                     file.refresh(false, false);
                 });
             } catch (Exception e) {
-                showError("写入文件失败: " + e.getMessage());
+                showError(BapBundle.message("action.UpdateFileAction.error.write_failed", e.getMessage())); // "写入文件失败: " + e.getMessage()
             }
         });
     }
@@ -236,7 +242,7 @@ public class UpdateFileAction extends AnAction {
                     file.delete(this);
                 });
             } catch (Exception e) {
-                showError("删除失败: " + e.getMessage());
+                showError(BapBundle.message("action.UpdateFileAction.error.delete_failed", e.getMessage())); // "删除失败: " + e.getMessage()
             }
         });
     }
@@ -314,11 +320,16 @@ public class UpdateFileAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Update Error"));
+        ApplicationManager.getApplication().invokeLater(() ->
+                // 修改10: Error Dialog Title (使用提取到 common 的 key)
+                Messages.showErrorDialog(msg, BapBundle.message("title.update_error")) // "Update Error"
+        );
     }
 
     private void sendNotification(Project project, String title, String content, NotificationType type) {
-        Notification notification = new Notification("Cloud Project Download", title, content, type);
+        Notification notification = new Notification(
+                BapBundle.message("notification.group.cloud.download"), // "Cloud Project Download"
+                title, content, type);
         Notifications.Bus.notify(notification, project);
     }
 
