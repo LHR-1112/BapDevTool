@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaConst;
 import bap.md.ver.VersionNode;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.ui.ProjectHistoryDialog;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -35,11 +36,14 @@ public class ShowProjectHistoryAction extends AnAction {
 
         File confFile = new File(selectedFile.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
         if (!confFile.exists()) {
-            Messages.showWarningDialog("请选中 Bap 模块的根目录 (包含 .develop 文件) 执行此操作。", "提示");
+            Messages.showWarningDialog(
+                    BapBundle.message("action.ShowProjectHistoryAction.warning.select_root"), // "请选中 Bap 模块的根目录..."
+                    BapBundle.message("title.tip")                                            // "提示" (Moved to common)
+            );
             return;
         }
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Loading Project History...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.ShowProjectHistoryAction.progress.loading"), true) { // "Loading Project History..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 loadAndShowHistory(project, selectedFile, indicator);
@@ -57,22 +61,22 @@ public class ShowProjectHistoryAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError("读取配置失败: " + e.getMessage());
+            showError(BapBundle.message("error.read_config", e.getMessage())); // "读取配置失败: " + e.getMessage()
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError("配置文件信息不全");
+            showError(BapBundle.message("error.config_incomplete")); // "配置文件信息不全"
             return;
         }
 
         BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
             indicator.setIndeterminate(true);
-            indicator.setText("Connecting...");
+            indicator.setText(BapBundle.message("progress.connecting")); // "Connecting..."
             client.connect(uri, user, pwd);
 
-            indicator.setText("Fetching project version list...");
+            indicator.setText(BapBundle.message("action.ShowProjectHistoryAction.progress.fetching")); // "Fetching project version list..."
 
             // 🔴 核心修改：改为直接查询项目版本列表
             List<VersionNode> versionList = client.getService().queryVersionList(projectUuid);
@@ -84,7 +88,10 @@ public class ShowProjectHistoryAction extends AnAction {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (versionList == null || versionList.isEmpty()) {
-                    Messages.showInfoMessage("未找到任何历史记录。", "Project History");
+                    Messages.showInfoMessage(
+                            BapBundle.message("action.ShowProjectHistoryAction.info.no_records"),      // "未找到任何历史记录。"
+                            BapBundle.message("action.ShowProjectHistoryAction.title.project_history") // "Project History"
+                    );
                 } else {
                     // 传入 List<VersionNode> 而不是 Map
                     new ProjectHistoryDialog(project, versionList, fUuid, fUri, fUser, fPwd).show();
@@ -93,7 +100,7 @@ public class ShowProjectHistoryAction extends AnAction {
 
         } catch (Exception e) {
             e.printStackTrace();
-            showError("获取历史失败: " + e.getMessage());
+            showError(BapBundle.message("action.ShowProjectHistoryAction.error.fetch_failed", e.getMessage())); // "获取历史失败: " + e.getMessage()
         } finally {
             client.shutdown();
         }
@@ -106,7 +113,7 @@ public class ShowProjectHistoryAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "History Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("title.history_error")));
     }
 
     @Override
