@@ -27,6 +27,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NotNull;
+import com.bap.dev.i18n.BapBundle;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -48,7 +49,7 @@ public class CompareJavaCodeAction extends AnAction {
         // 2. 向上查找模块根目录
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件，无法连接云端。", "错误");
+            Messages.showWarningDialog(BapBundle.message("error.develop_not_found"), BapBundle.message("notification.error_title"));
             return;
         }
 
@@ -102,12 +103,12 @@ public class CompareJavaCodeAction extends AnAction {
         });
 
         if (fullClassName == null) {
-            Messages.showWarningDialog("无法解析 Java 类名，请确认这是有效的 Java 文件。", "错误");
+            Messages.showWarningDialog(BapBundle.message("action.CompareJavaCodeAction.warning.invalid_classname"), BapBundle.message("notification.error_title"));
             return;
         }
 
         // 4. 启动后台任务
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Fetching Remote Code...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.CompareJavaCodeAction.progress.fetching"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
@@ -126,12 +127,12 @@ public class CompareJavaCodeAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError(project, "读取配置失败: " + e.getMessage());
+            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.read_config", e.getMessage()));
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError(project, "配置文件信息不全");
+            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.config_incomplete"));
             return;
         }
 
@@ -152,14 +153,14 @@ public class CompareJavaCodeAction extends AnAction {
             final String finalRemoteCode = remoteCodeContent;
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (finalRemoteCode == null) {
-                    Messages.showInfoMessage("云端不存在此文件 (New File)", "比对结果");
+                    Messages.showInfoMessage(BapBundle.message("action.CompareJavaCodeAction.info.remote_missing"), BapBundle.message("action.CompareJavaCodeAction.info.diff_title"));
                 } else {
                     showDiffWindow(project, localFile, finalRemoteCode);
                 }
             });
 
         } catch (Exception e) {
-            showError(project, "RPC 请求失败: " + e.getMessage());
+            showError(project, BapBundle.message("action.CompareJavaCodeAction.error.rpc_failed", e.getMessage()));
         } finally {
             client.shutdown();
         }
@@ -171,11 +172,11 @@ public class CompareJavaCodeAction extends AnAction {
         DiffContent remoteDiffContent = contentFactory.create(project, remoteContent, JavaFileType.INSTANCE);
 
         SimpleDiffRequest request = new SimpleDiffRequest(
-                "Bap Code Compare: " + localFile.getName(),
+                BapBundle.message("action.CompareJavaCodeAction.dialog.title", localFile.getName()),
                 localDiffContent,
                 remoteDiffContent,
-                "Local (Disk)",
-                "Remote (Cloud)"
+                BapBundle.message("action.CompareJavaCodeAction.label.local"),
+                BapBundle.message("action.CompareJavaCodeAction.label.remote")
         );
 
         DiffManager.getInstance().showDiff(project, request);
@@ -218,6 +219,6 @@ public class CompareJavaCodeAction extends AnAction {
     }
 
     private void showError(Project project, String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Compare Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("action.CompareJavaCodeAction.error.compare_error")));
     }
 }
