@@ -96,14 +96,74 @@ public class CheckUpdateActivity implements StartupActivity {
         }
 
         if (compareVersion(cleanLatest, cleanCurrent) > 0) {
-            ApplicationManager.getApplication().invokeLater(() ->
-                            showUpdateNotification(project, currentVersion, latest),
-                    ModalityState.any());
+            boolean manual = isManual;
+            ApplicationManager.getApplication().invokeLater(
+                    () -> showUpdateUi(project, currentVersion, latest.version, latest, manual),
+                    ModalityState.any()
+            );
         } else if (isManual) {
-            ApplicationManager.getApplication().invokeLater(() ->
-                            Messages.showInfoMessage(project,
-                                    "当前版本 (" + currentVersion + ") 已是最新。", "Check Update"),
-                    ModalityState.any());
+            ApplicationManager.getApplication().invokeLater(
+                    () -> Messages.showInfoMessage(project, "当前版本 (" + currentVersion + ") 已是最新。", "检查更新"),
+                    ModalityState.any()
+            );
+        }
+    }
+
+    private static void showUpdateUi(@Nullable Project project, String current, String latest, RepoEntry latestEntry, boolean isManual) {
+        String html = buildUpdateHtml(current, latest, latestEntry);
+
+        if (isManual) {
+            // ✅ 设置页点击：弹 Modal，内容与通知一致
+            showUpdateModal(project, html, latest, latestEntry);
+        } else {
+            // ✅ 启动自动检查：右下角通知
+            showUpdateNotification(project, html, latestEntry);
+        }
+    }
+
+    private static String buildUpdateHtml(String current, String latest, RepoEntry latestEntry) {
+        String notesHtml = "";
+        if (latestEntry.changeNotes != null && !latestEntry.changeNotes.isBlank()) {
+            String text = latestEntry.changeNotes.trim();
+            text = text.length() > 800 ? text.substring(0, 800) + "\n…" : text;
+            notesHtml = "<br/><br/><b>更新内容：</b><br/>" + escapeHtml(text).replace("\n", "<br/>");
+        }
+
+        return String.format(
+                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>%s",
+                latest, current, notesHtml
+        );
+    }
+
+    private static void showUpdateModal(@Nullable Project project, String htmlContent, String latest, RepoEntry latestEntry) {
+        String[] options = new String[] {
+                "更新并重启",
+                "GitHub下载",
+                "忽略此版本",
+        };
+
+        int choice = Messages.showDialog(
+                project,
+                "<html>" + htmlContent + "</html>",
+                "Bap Plugin Update",
+                options,
+                1,
+                Messages.getInformationIcon()
+        );
+
+        switch (choice) {
+            case 0 -> downloadAndInstall(project, latestEntry);
+            case 1 -> {
+                if (latestEntry.backupUrl != null && !latestEntry.backupUrl.isBlank()) {
+                    BrowserUtil.browse(latestEntry.backupUrl.trim());
+                } else if (latestEntry.downloadUrl != null && !latestEntry.downloadUrl.isBlank()) {
+                    BrowserUtil.browse(latestEntry.downloadUrl.trim());
+                } else {
+                    BrowserUtil.browse(latestEntry.backupUrl);
+                }
+            }
+            case 2 -> BapSettingsState.getInstance().ignoredVersion = latest;
+            default -> { /* 关闭 */ }
         }
     }
 

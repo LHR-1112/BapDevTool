@@ -29,6 +29,8 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public boolean checkUpdateOnStartup = true;
     // --------------------------------
 
+    public boolean showProjectNodeActions = true;
+
     public List<LoginProfile> loginHistory = new ArrayList<>();
     public Map<String, List<RelocateProfile>> moduleRelocateHistory = new HashMap<>();
 

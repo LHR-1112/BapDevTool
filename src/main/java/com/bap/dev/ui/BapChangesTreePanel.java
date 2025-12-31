@@ -101,7 +101,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             public void mouseClicked(MouseEvent e) {
                 // 处理按钮点击
                 // 暂时注释掉，太难用了
-//                handleButtonClick(e);
+                handleButtonClick(e);
 
                 if (e.getClickCount() == 2) {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
@@ -142,36 +142,56 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     }
 
     private void handleButtonClick(MouseEvent e) {
+        if (!BapSettingsState.getInstance().showProjectNodeActions) return; // ✅ 关闭则不响应
         if (!SwingUtilities.isLeftMouseButton(e)) return;
 
-        TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+        Point p = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), tree);
+
+        // 用 row 定位，避免 x 影响
+        int row = tree.getClosestRowForLocation(p.x, p.y);
+        if (row < 0) return;
+        Rectangle rowRect = tree.getRowBounds(row);
+        if (rowRect == null) return;
+        if (p.y < rowRect.y || p.y > rowRect.y + rowRect.height) return;
+
+        // ✅ 关键：用 rowRect 的右边界，而不是 visibleRect
+        int rightEdge = rowRect.x + rowRect.width;
+
+        Rectangle r = tree.getRowBounds(row);
+        if (r == null || p.y < r.y || p.y > r.y + r.height) return;
+
+        TreePath path = tree.getPathForRow(row);
         if (path == null) return;
 
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
         Object userObject = node.getUserObject();
+        if (!(userObject instanceof ModuleWrapper)) return;
 
-        if (userObject instanceof ModuleWrapper) {
-            Rectangle bounds = tree.getPathBounds(path);
-            if (bounds != null) {
-                int x = e.getX();
-                int rightEdge = bounds.x + bounds.width;
 
-                // 布局顺序：[Update] [Commit] [Publish] (最右)
-                // 按钮区域在整个节点的右侧，所以我们要计算距离右边缘的距离
+        // ⚠️ 下面三项必须和你的 buttonPanel 布局一致
+        int n = 4;      // 你现在是 4 个按钮（含刷新）
+        int cellW = 18; // 建议固定成 18（见下方“同步渲染尺寸”）
+        int gap = 2;    // 你的 GridLayout hgap
 
-                int distFromRight = rightEdge - x;
-                int btnWidth = 22; // 估算每个按钮的点击宽度
+        int totalW = n * cellW + (n - 1) * gap;
+        int startX = rightEdge - totalW;
 
-                tree.setSelectionPath(path);
+        int x = p.x;
+        if (x < startX || x > rightEdge) return;
 
-                if (distFromRight > 0 && distFromRight < btnWidth) {
-                    runAction("com.bap.dev.action.PublishProjectAction", e);
-                } else if (distFromRight >= btnWidth && distFromRight < btnWidth * 2) {
-                    runAction("com.bap.dev.action.CommitAllAction", e);
-                } else if (distFromRight >= btnWidth * 2 && distFromRight < btnWidth * 3) {
-                    runAction("com.bap.dev.action.UpdateAllAction", e);
-                }
-            }
+        // 命中第几个按钮（从左到右 0..n-1）
+        int dx = x - startX;
+        int index = dx / (cellW + gap);
+        if (index < 0 || index >= n) return;
+
+        tree.setSelectionPath(path);
+
+        // ✅ index 映射必须与你 buttonPanel.add 顺序一致
+        switch (index) {
+            case 0 -> runAction("com.bap.dev.action.RefreshProjectAction", e);
+            case 1 -> runAction("com.bap.dev.action.UpdateAllAction", e);
+            case 2 -> runAction("com.bap.dev.action.CommitAllAction", e);
+            case 3 -> runAction("com.bap.dev.action.PublishProjectAction", e);
         }
     }
 
@@ -505,6 +525,15 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     // --- 🔴 修复布局：使用 FlowLayout 防止按钮错位 ---
     private static class BapChangeRenderer implements TreeCellRenderer {
 
+        private JLabel iconLabel(Icon icon) {
+            JLabel l = new JLabel(icon);
+            Dimension d = new Dimension(18, 18);
+            l.setPreferredSize(d);
+            l.setMinimumSize(d);
+            l.setMaximumSize(d);
+            return l;
+        }
+
         private final ColoredTreeCellRenderer fileRenderer = new ColoredTreeCellRenderer() {
             @Override
             public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -521,18 +550,17 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 renderContent(this, value);
             }
         };
-        private final JPanel buttonPanel = new JPanel(new GridLayout(1, 3, 2, 0));
+        private final JPanel buttonPanel = new JPanel(new GridLayout(1, 4, 2, 0));
 
         public BapChangeRenderer() {
             modulePanel.setOpaque(true);
             buttonPanel.setOpaque(false);
 
-            // 暂时注释掉，太难用了
-//            buttonPanel.add(new JLabel(AllIcons.Actions.CheckOut));
-//            buttonPanel.add(new JLabel(AllIcons.Actions.Commit));
-//            buttonPanel.add(new JLabel(AllIcons.Actions.Execute));
+            buttonPanel.add(iconLabel(AllIcons.Actions.Refresh));
+            buttonPanel.add(iconLabel(AllIcons.Actions.CheckOut));
+            buttonPanel.add(iconLabel(AllIcons.Actions.Commit));
+            buttonPanel.add(iconLabel(AllIcons.Actions.Execute));
 
-            // 直接添加，FlowLayout 会按顺序从左到右排列
             modulePanel.add(moduleTextRenderer);
             modulePanel.add(buttonPanel);
         }
@@ -552,6 +580,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     modulePanel.setBackground(UIUtil.getTreeBackground());
                     moduleTextRenderer.setForeground(UIUtil.getTreeForeground());
                 }
+
+                // ✅ 开关控制：隐藏/显示右侧三个按钮
+                buttonPanel.setVisible(BapSettingsState.getInstance().showProjectNodeActions);
                 return modulePanel;
             } else {
                 return fileRenderer.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);

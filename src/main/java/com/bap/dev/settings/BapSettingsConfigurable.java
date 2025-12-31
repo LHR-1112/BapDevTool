@@ -6,6 +6,7 @@ import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColorPanel;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ToolbarDecorator;
+import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBList;
 import com.intellij.util.ui.FormBuilder;
 import org.jetbrains.annotations.Nls;
@@ -19,11 +20,13 @@ import java.util.stream.Collectors;
 
 public class BapSettingsConfigurable implements Configurable {
 
-    private JCheckBox compileOnPublishCheckbox;
-    private JCheckBox autoRefreshCheckbox;
+    private JBCheckBox compileOnPublishCheckbox;
+    private JBCheckBox autoRefreshCheckbox;
     // --- 🔴 新增复选框 ---
-    private JCheckBox checkUpdateCheckbox;
+    private JBCheckBox checkUpdateCheckbox;
     // -------------------
+
+    private JBCheckBox showProjectNodeActionsCheckBox;
 
     private ColorPanel modifiedColorPanel;
     private ColorPanel addedColorPanel;
@@ -39,12 +42,14 @@ public class BapSettingsConfigurable implements Configurable {
 
     @Override
     public @Nullable JComponent createComponent() {
-        compileOnPublishCheckbox = new JCheckBox("发布时自动编译 (Rebuild All on Publish)");
-        autoRefreshCheckbox = new JCheckBox("自动刷新文件状态 (Auto Refresh File Status)");
+        compileOnPublishCheckbox = new JBCheckBox("发布时自动编译");
+        autoRefreshCheckbox = new JBCheckBox("自动刷新文件状态");
         autoRefreshCheckbox.setToolTipText("开启后，文件修改保存时会自动触发云端比对（可能会有网络延迟）");
 
         // --- 🔴 初始化新增组件 ---
-        checkUpdateCheckbox = new JCheckBox("启动时自动检查更新 (Check Update on Startup)");
+        checkUpdateCheckbox = new JBCheckBox("启动时自动检查更新");
+
+        showProjectNodeActionsCheckBox = new JBCheckBox("显示工程节点右侧操作按钮");
 
         JButton checkUpdateBtn = new JButton("检查更新");
         checkUpdateBtn.addActionListener(e -> {
@@ -76,6 +81,7 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(compileOnPublishCheckbox)
                 .addComponent(autoRefreshCheckbox)
                 .addComponent(updatePanel) // 添加更新配置行
+                .addComponent(showProjectNodeActionsCheckBox) // 添加更新配置行
                 .addSeparator()
                 .addLabeledComponent("Modified color:", createColorRow(modifiedColorPanel, JBColor.YELLOW))
                 .addLabeledComponent("Added color:", createColorRow(addedColorPanel, JBColor.BLUE))
@@ -103,6 +109,7 @@ public class BapSettingsConfigurable implements Configurable {
         boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
         // --- 🔴 检查新增配置 ---
         boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
+        boolean showProjectNodeModified = showProjectNodeActionsCheckBox.isSelected() != settings.showProjectNodeActions;
         // --------------------
 
         List<String> currentStoredUris = settings.loginHistory.stream()
@@ -114,7 +121,7 @@ public class BapSettingsConfigurable implements Configurable {
                 !isColorEqual(addedColorPanel.getSelectedColor(), settings.getAddedColorObj()) ||
                 !isColorEqual(deletedColorPanel.getSelectedColor(), settings.getDeletedColorObj());
 
-        return checkboxModified || autoRefreshModified || checkUpdateModified || listModified || colorModified;
+        return checkboxModified || autoRefreshModified || checkUpdateModified || showProjectNodeModified || listModified || colorModified;
     }
 
     private boolean isColorEqual(Color c1, Color c2) {
@@ -131,6 +138,8 @@ public class BapSettingsConfigurable implements Configurable {
         // --- 🔴 保存新增配置 ---
         settings.checkUpdateOnStartup = checkUpdateCheckbox.isSelected();
         // --------------------
+
+        settings.showProjectNodeActions = showProjectNodeActionsCheckBox.isSelected();
 
         List<String> uiUris = uriListModel.getItems();
         List<BapSettingsState.LoginProfile> newHistory = new ArrayList<>();
@@ -167,6 +176,8 @@ public class BapSettingsConfigurable implements Configurable {
         modifiedColorPanel.setSelectedColor(settings.getModifiedColorObj());
         addedColorPanel.setSelectedColor(settings.getAddedColorObj());
         deletedColorPanel.setSelectedColor(settings.getDeletedColorObj());
+
+        showProjectNodeActionsCheckBox.setSelected(settings.showProjectNodeActions);
     }
 
     @Override
