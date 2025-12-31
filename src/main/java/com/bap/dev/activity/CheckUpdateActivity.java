@@ -300,7 +300,7 @@ public class CheckUpdateActivity implements StartupActivity {
             return;
         } catch (NoSuchMethodException ignored) {}
 
-        throw new UnsupportedOperationException("当前 IDE 版本不支持 installAfterRestart 安装接口");
+        throw new UnsupportedOperationException("当前 IDE 版本不支持 installAfterRestart 安装接口，请尝试从Github下载更新并安装");
     }
 
     // ... (RepoEntry, parseRepoEntry, extractAttr, normalizeVersion, compareVersion, safeInt, downloadToTemp 保持不变) ...
