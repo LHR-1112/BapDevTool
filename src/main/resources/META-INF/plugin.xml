@@ -3,7 +3,7 @@
     <name>BapDevPlugin</name>
     <version>1.2.3</version>
     <vendor email="2991747768@qq.com">LHR_1112</vendor>
-    <resource-bundle>messages.PluginBundle</resource-bundle>
+    <resource-bundle>messages.BapBundle</resource-bundle>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
 

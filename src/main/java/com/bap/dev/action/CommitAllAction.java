@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.*;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
@@ -59,24 +60,27 @@ public class CommitAllAction extends AnAction {
 
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("action.commitAllActions.error.develop_not_found"),
+                    BapBundle.message("notification.error_title")
+            );
             return;
         }
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Preparing Commit...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.commitAllActions.progress.prepare"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setIndeterminate(true);
-                    indicator.setText("Refreshing module status...");
+                    indicator.setText(BapBundle.message("action.commitAllActions.progress.refresh_module"));
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     refresher.refreshModule(moduleRoot);
 
-                    indicator.setText("Collecting changes...");
+                    indicator.setText(BapBundle.message("action.commitAllActions.progress.collect_changes"));
                     List<VirtualFile> changedFiles = collectChangedFiles(project, moduleRoot);
 
                     if (changedFiles.isEmpty()) {
-                        showInfo("没有检测到需要提交的文件 (M/A/D)。");
+                        showInfo(BapBundle.message("action.commitAllActions.warning.no_changes"));
                         return;
                     }
 
@@ -95,7 +99,7 @@ public class CommitAllAction extends AnAction {
 
                         // 尝试通过 RPC 获取工程名称
                         if (uri != null && user != null && pwd != null && projectUuid != null) {
-                            indicator.setText("Fetching project info...");
+                            indicator.setText(BapBundle.message("action.commitAllActions.progress.fetch_project"));
                             BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
                             try {
                                 client.connect(uri, user, pwd);
@@ -126,14 +130,14 @@ public class CommitAllAction extends AnAction {
 
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    showError("准备提交失败: " + ex.getMessage());
+                    showError(BapBundle.message("action.commitAllActions.error.prepare_failed_prefix") + ex.getMessage());
                 }
             }
         });
     }
 
     private void startBatchCommit(Project project, VirtualFile moduleRoot, List<VirtualFile> files, String comments) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Committing Files...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.commitAllActions.progress.committing"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = null;
@@ -145,7 +149,7 @@ public class CommitAllAction extends AnAction {
                     String pwd = extractAttr(content, "Password");
                     String projectUuid = extractAttr(content, "Project");
 
-                    indicator.setText("Connecting...");
+                    indicator.setText(BapBundle.message("progress.connecting"));
                     client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
 
                     List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
@@ -161,7 +165,7 @@ public class CommitAllAction extends AnAction {
                     for (VirtualFile file : files) {
                         if (indicator.isCanceled()) break;
                         indicator.setFraction((double) ++count / files.size());
-                        indicator.setText("Processing " + file.getName() + "...");
+                        indicator.setText(BapBundle.message("action.commitAllActions.progress.processing") + file.getName() + "...");
 
                         if (isResourceFile(moduleRoot, file)) {
                             prepareResource(project, client, projectUuid, moduleRoot, file, folders, mapFolder2Files, deleteFileMap);
@@ -181,7 +185,7 @@ public class CommitAllAction extends AnAction {
 
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    showError("批量提交失败: " + ex.getMessage());
+                    showError(BapBundle.message("action.commitAllActions.error.commit_error") + ex.getMessage());
                 } finally {
                     client.shutdown();
                 }
@@ -329,7 +333,14 @@ public class CommitAllAction extends AnAction {
             // 🔴 新增：设置自动聚焦
             project.putUserData(BapChangesTreePanel.LAST_BAP_MODULE_ROOT, moduleRoot);
 
-            sendNotification(project, "提交成功", "已提交 " + files.size() + " 个文件。");
+            sendNotification(
+                    project,
+                    BapBundle.message("action.commitAllActions.notification.commit_success_tittle"),
+                    BapBundle.message("action.commitAllActions.notification.commit_success_prefix") +
+                            files.size() +
+                            BapBundle.message("action.commitAllActions.notification.commit_success_suffix")
+            );
+
             project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
         });
     }
@@ -448,8 +459,8 @@ public class CommitAllAction extends AnAction {
             this.files = files;
             this.targetUri = targetUri;
             this.targetProject = targetProject;
-            setTitle("Commit All Files"); // 标题略有不同
-            setOKButtonText("Commit All");
+            setTitle(BapBundle.message("action.commitAllActions.action.full_name")); // 标题略有不同
+            setOKButtonText(BapBundle.message("action.commitAllActions.action.short_name"));
             init();
         }
 
@@ -460,10 +471,10 @@ public class CommitAllAction extends AnAction {
 
             // 0. 顶部：服务器和工程信息
             JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 5));
-            infoPanel.setBorder(BorderFactory.createTitledBorder("Target Environment"));
+            infoPanel.setBorder(BorderFactory.createTitledBorder(BapBundle.message("action.commitAllActions.panel.target_env")));
 
-            JLabel uriLabel = new JLabel("Server: " + targetUri);
-            JLabel projLabel = new JLabel("Project: " + targetProject);
+            JLabel uriLabel = new JLabel(BapBundle.message("action.commitAllActions.info.server") + targetUri);
+            JLabel projLabel = new JLabel(BapBundle.message("action.commitAllActions.info.project") + targetProject);
 
             infoPanel.add(uriLabel);
             infoPanel.add(projLabel);
@@ -476,13 +487,17 @@ public class CommitAllAction extends AnAction {
             // 简单美化字体
             fileListArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 
-            JLabel fileLabel = new JLabel("Changes to commit (" + files.size() + " files):");
+            JLabel fileLabel = new JLabel(
+                    BapBundle.message("action.commitAllActions.summary.changes_prefix") +
+                            files.size() +
+                            BapBundle.message("action.commitAllActions.summary.changes_suffix")
+            );
             JPanel filePanel = new JPanel(new BorderLayout(0, 5));
             filePanel.add(fileLabel, BorderLayout.NORTH);
             filePanel.add(new JBScrollPane(fileListArea), BorderLayout.CENTER);
 
             // 2. 下半部分：注释输入
-            JLabel commentLabel = new JLabel("Commit Message:");
+            JLabel commentLabel = new JLabel(BapBundle.message("action.commitAllActions.form.commit_message"));
             commentArea = new JBTextArea(4, 50);
             commentArea.setLineWrap(true);
             commentArea.setWrapStyleWord(true);

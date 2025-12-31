@@ -160,3 +160,13 @@ tasks {
         kotlinOptions.jvmTarget = "17"
     }
 }
+
+tasks {
+    runIde {
+        // 强制沙箱环境使用英文 (en_US)
+        jvmArgs = listOf("-Duser.language=en", "-Duser.region=US")
+
+        // 如果想测试中文环境，请使用：
+        // jvmArgs = listOf("-Duser.language=zh", "-Duser.region=CN")
+    }
+}
