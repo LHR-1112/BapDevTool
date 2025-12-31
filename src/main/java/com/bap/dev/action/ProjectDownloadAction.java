@@ -3,6 +3,7 @@ package com.bap.dev.action;
 import bap.java.CJavaProjectDto;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.ProjectDownloader;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.ui.LogonDialog;
 import com.bap.dev.ui.ProjectDownloadDialog;
 import com.intellij.execution.RunManager;
@@ -95,7 +96,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
 
         BapRpcClient tempClient = new BapRpcClient();
 
-        ProgressManager.getInstance().run(new Task.Modal(project, "Connecting...", true) {
+        ProgressManager.getInstance().run(new Task.Modal(project, BapBundle.message("progress.connecting"), true) { // "Connecting..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
@@ -107,7 +108,10 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                     ApplicationManager.getApplication().invokeLater(() -> {
                         tempClient.shutdown();
                         if (projects == null || projects.isEmpty()) {
-                            Messages.showWarningDialog("连接成功，但服务端没有返回任何工程。", "无数据");
+                            Messages.showWarningDialog(
+                                    BapBundle.message("action.ProjectDownloadAction.warning.no_projects"), // "连接成功..."
+                                    BapBundle.message("action.ProjectDownloadAction.warning.no_data")      // "无数据"
+                            );
                             return;
                         }
 
@@ -122,19 +126,21 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
 
                             if (project == null) {
                                 FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
-                                descriptor.setTitle("选择项目保存位置");
-                                descriptor.setDescription("请选择一个文件夹，新工程将下载到该文件夹内。");
+                                descriptor.setTitle(BapBundle.message("action.ProjectDownloadAction.chooser.title")); // "选择项目保存位置"
+                                descriptor.setDescription(BapBundle.message("action.ProjectDownloadAction.chooser.desc")); // "请选择一个文件夹..."
                                 VirtualFile file = FileChooser.chooseFile(descriptor, null, null);
                                 if (file == null) return;
                                 targetRoot = file.getPath();
                                 isOpenNewWindow = true;
                             } else {
                                 int choice = Messages.showDialog(project,
-                                        "请选择工程下载方式：\n\n" +
-                                                "1. 添加到当前项目：作为模块导入\n" +
-                                                "2. 作为独立项目打开：在新窗口中打开",
-                                        "下载选项",
-                                        new String[]{"添加到当前项目", "作为独立项目打开", "取消"},
+                                        BapBundle.message("action.ProjectDownloadAction.dialog.mode_msg"), // "请选择工程下载方式..."
+                                        BapBundle.message("action.ProjectDownloadAction.dialog.mode_title"), // "下载选项"
+                                        new String[]{
+                                                BapBundle.message("action.ProjectDownloadAction.button.add"), // "添加到当前项目"
+                                                BapBundle.message("action.ProjectDownloadAction.button.open"), // "作为独立项目打开"
+                                                BapBundle.message("action.ProjectDownloadAction.button.cancel") // "取消"
+                                        },
                                         0,
                                         Messages.getQuestionIcon());
 
@@ -142,7 +148,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                                 isOpenNewWindow = (choice == 1);
                                 if (isOpenNewWindow) {
                                     FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
-                                    descriptor.setTitle("选择项目保存位置");
+                                    descriptor.setTitle(BapBundle.message("action.ProjectDownloadAction.chooser.title")); // "选择项目保存位置"
                                     VirtualFile file = FileChooser.chooseFile(descriptor, project, null);
                                     if (file == null) return;
                                     targetRoot = file.getPath();
@@ -160,7 +166,9 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                 } catch (Exception ex) {
                     tempClient.shutdown();
                     ApplicationManager.getApplication().invokeLater(() ->
-                            Messages.showErrorDialog("连接失败: " + ex.getMessage(), "错误"));
+                            // 修改7: Error Dialog
+                            Messages.showErrorDialog(BapBundle.message("action.ProjectDownloadAction.error.connect_prefix", ex.getMessage()), // "连接失败: " + ex.getMessage()
+                                    BapBundle.message("notification.error_title"))); // "错误"
                 }
             }
         });
@@ -168,7 +176,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
 
     // ... (请务必保留 startDownloadTask, configureModuleStructure, createRunConfiguration, sendNotification 等所有辅助方法) ...
     private void startDownloadTask(Project currentProject, String uri, String user, String pwd, String uuid, String projectName, String targetRoot, boolean isOpenNewWindow) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(currentProject, "正在下载模块 " + projectName + "...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(currentProject, BapBundle.message("action.ProjectDownloadAction.progress.download_prefix", projectName), true) { // "正在下载模块 " + projectName + "..."
             private final ProjectDownloader downloader = new ProjectDownloader();
             private boolean isSuccess = false;
             private final File moduleDir = new File(targetRoot, projectName);
@@ -176,15 +184,19 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
-                    indicator.setText("正在连接服务器...");
+                    indicator.setText(BapBundle.message("action.ProjectDownloadAction.progress.connect_server")); // "正在连接服务器..."
                     downloader.connect(uri, user, pwd);
-                    indicator.setText("正在下载并创建模块...");
+                    indicator.setText(BapBundle.message("action.ProjectDownloadAction.progress.download_create")); // "正在下载并创建模块..."
                     downloader.downloadProject(uuid, projectName, targetRoot, null, indicator);
                     isSuccess = true;
                     VirtualFile newModuleDirVFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(moduleDir);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         if (newModuleDirVFile == null) {
-                            sendNotification(currentProject, "刷新失败", "无法找到新下载的目录", NotificationType.ERROR);
+                            // 修改10: Notification
+                            sendNotification(currentProject,
+                                    BapBundle.message("action.ProjectDownloadAction.notification.refresh_fail"), // "刷新失败"
+                                    BapBundle.message("action.ProjectDownloadAction.notification.dir_not_found"), // "无法找到新下载的目录"
+                                    NotificationType.ERROR);
                             return;
                         }
                         newModuleDirVFile.refresh(true, true, () -> {
@@ -194,7 +206,9 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                                     if (newProject != null) {
                                         configureModuleStructure(newProject, newModuleDirVFile, moduleDir, projectName);
                                     } else {
-                                        Messages.showErrorDialog("无法打开新项目: " + moduleDir.getPath(), "错误");
+                                        // 修改11: Error Dialog
+                                        Messages.showErrorDialog(BapBundle.message("action.ProjectDownloadAction.error.open_fail_prefix", moduleDir.getPath()), // "无法打开新项目: "
+                                                BapBundle.message("notification.error_title")); // "错误"
                                     }
                                 } else {
                                     configureModuleStructure(currentProject, newModuleDirVFile, moduleDir, projectName);
@@ -206,16 +220,24 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                     String msg = cancelEx.getMessage();
                     if ("USER_CANCEL_DOWNLOAD".equals(msg) || cancelEx instanceof InterruptedException) {
                         ApplicationManager.getApplication().invokeLater(() ->
-                                sendNotification(currentProject, "下载已取消", "正在清理临时文件...", NotificationType.INFORMATION));
+                                // 修改12: Notification (Cancelled)
+                                sendNotification(currentProject,
+                                        BapBundle.message("action.ProjectDownloadAction.notification.cancel_title"), // "下载已取消"
+                                        BapBundle.message("action.ProjectDownloadAction.notification.cleaning"), // "正在清理临时文件..."
+                                        NotificationType.INFORMATION));
                     } else {
                         cancelEx.printStackTrace();
                         ApplicationManager.getApplication().invokeLater(() ->
-                                Messages.showErrorDialog("下载出错: " + msg, "错误"));
+                                // 修改13: Error Dialog
+                                Messages.showErrorDialog(BapBundle.message("action.ProjectDownloadAction.error.download_prefix", msg), // "下载出错: " + msg
+                                        BapBundle.message("notification.error_title"))); // "错误"
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
                     ApplicationManager.getApplication().invokeLater(() ->
-                            Messages.showErrorDialog("下载出错: " + ex.getMessage(), "错误"));
+                            // 修改14: Error Dialog
+                            Messages.showErrorDialog(BapBundle.message("action.ProjectDownloadAction.error.download_prefix", ex.getMessage()), // "下载出错: " + ex.getMessage()
+                                    BapBundle.message("notification.error_title"))); // "错误"
                 } finally {
                     downloader.shutdown();
                     if (!isSuccess) {
@@ -227,7 +249,8 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
             private void cleanupFailedDownload(ProgressIndicator indicator) {
                 if (moduleDir.exists()) {
                     try {
-                        indicator.setText("正在清理残余文件...");
+                        // 修改15: Indicator text
+                        indicator.setText(BapBundle.message("action.ProjectDownloadAction.progress.cleaning_residual")); // "正在清理残余文件..."
                         FileUtil.delete(moduleDir);
                     } catch (Exception e) {
                         System.err.println("Failed to clean up directory: " + moduleDir.getAbsolutePath());
@@ -241,7 +264,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
         try {
             WriteAction.run(() -> {
                 if (project.isDisposed()) return;
-                if (!newModuleDirVFile.exists()) throw new RuntimeException("无法找到模块目录");
+                if (!newModuleDirVFile.exists()) throw new RuntimeException(BapBundle.message("action.ProjectDownloadAction.error.module_dir_missing")); // "无法找到模块目录"
                 ModuleManager moduleManager = ModuleManager.getInstance(project);
                 Module newModule = moduleManager.findModuleByName(projectName);
                 if (newModule == null) {
@@ -284,7 +307,10 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                         if (!project.isDisposed())
                             createRunConfiguration(project, finalModule, projectName, newModuleDirIo.getAbsolutePath());
                     });
-                    sendNotification(project, "下载并配置成功", "模块 <b>" + projectName + "</b> 已就绪。", NotificationType.INFORMATION);
+                    sendNotification(project,
+                            BapBundle.message("action.ProjectDownloadAction.notification.success_title"), // "下载并配置成功"
+                            BapBundle.message("action.ProjectDownloadAction.notification.success_content", projectName), // "模块 <b>" + projectName + "</b> 已就绪。"
+                            NotificationType.INFORMATION);
                 } catch (Exception e) {
                     if (!model.isDisposed()) model.dispose();
                     throw e;
@@ -292,7 +318,10 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
             });
         } catch (Exception err) {
             err.printStackTrace();
-            sendNotification(project, "配置模块失败", "出错：" + err.getMessage(), NotificationType.WARNING);
+            sendNotification(project,
+                    BapBundle.message("action.ProjectDownloadAction.notification.config_fail"), // "配置模块失败"
+                    BapBundle.message("action.ProjectDownloadAction.error.generic_prefix", err.getMessage()), // "出错：" + err.getMessage()
+                    NotificationType.WARNING);
         }
     }
 
