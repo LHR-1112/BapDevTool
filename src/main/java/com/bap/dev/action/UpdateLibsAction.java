@@ -4,6 +4,7 @@ import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.handler.LibConfigurator;
 import com.bap.dev.handler.LibDownloader;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -37,11 +38,14 @@ public class UpdateLibsAction extends AnAction {
         // 查找模块根目录
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件。", "错误");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件。"
+                    BapBundle.message("notification.error_title")   // "错误"
+            );
             return;
         }
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Libraries...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.UpdateLibsAction.progress.title"), true) { // "Updating Libraries..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 updateLibraries(project, moduleRoot, indicator);
@@ -61,18 +65,18 @@ public class UpdateLibsAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError("读取配置失败: " + e.getMessage());
+            showError(BapBundle.message("error.read_config", e.getMessage())); // "读取配置失败: " + e.getMessage()
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError("配置文件信息不全");
+            showError(BapBundle.message("error.config_incomplete")); // "配置文件信息不全"
             return;
         }
 
         BapRpcClient client = new BapRpcClient();
         try {
-            indicator.setText("Connecting...");
+            indicator.setText(BapBundle.message("progress.connecting")); // "Connecting..."
             client.connect(uri, user, pwd);
 
             // 1. 下载依赖
@@ -81,14 +85,17 @@ public class UpdateLibsAction extends AnAction {
             downloader.updateLibDiff(projectUuid, indicator);
 
             // 2. 配置 IDEA 依赖
-            indicator.setText("Configuring project structure...");
+            indicator.setText(BapBundle.message("action.UpdateLibsAction.progress.configuring")); // "Configuring project structure..."
             LibConfigurator.configureLibraries(project, moduleRoot);
 
-            sendNotification(project, "更新成功", "依赖库下载完成并已更新项目配置。");
+            sendNotification(project,
+                    BapBundle.message("action.UpdateLibsAction.notification.success_title"),   // "更新成功"
+                    BapBundle.message("action.UpdateLibsAction.notification.success_content")  // "依赖库下载完成并已更新项目配置。"
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
-            showError("更新失败: " + e.getMessage());
+            showError(BapBundle.message("action.UpdateLibsAction.error.update_failed", e.getMessage())); // "更新失败: " + e.getMessage()
         } finally {
             client.shutdown();
         }
@@ -114,11 +121,15 @@ public class UpdateLibsAction extends AnAction {
     }
 
     private void showError(String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Update Libs Error"));
+        ApplicationManager.getApplication().invokeLater(() ->
+                // 修改9: Error Dialog Title
+                Messages.showErrorDialog(msg, BapBundle.message("action.UpdateLibsAction.title.error"))); // "Update Libs Error"
     }
 
     private void sendNotification(Project project, String title, String content) {
-        Notification notification = new Notification("Cloud Project Download", title, content, NotificationType.INFORMATION);
+        Notification notification = new Notification(
+                BapBundle.message("notification.group.cloud.download"), // "Cloud Project Download"
+                title, content, NotificationType.INFORMATION);
         Notifications.Bus.notify(notification, project);
     }
 
