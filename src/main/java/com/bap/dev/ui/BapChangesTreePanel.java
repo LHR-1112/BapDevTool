@@ -100,7 +100,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             @Override
             public void mouseClicked(MouseEvent e) {
                 // 处理按钮点击
-                handleButtonClick(e);
+                // 暂时注释掉，太难用了
+//                handleButtonClick(e);
 
                 if (e.getClickCount() == 2) {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
@@ -526,9 +527,10 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             modulePanel.setOpaque(true);
             buttonPanel.setOpaque(false);
 
-            buttonPanel.add(new JLabel(AllIcons.Actions.CheckOut));
-            buttonPanel.add(new JLabel(AllIcons.Actions.Commit));
-            buttonPanel.add(new JLabel(AllIcons.Actions.Execute));
+            // 暂时注释掉，太难用了
+//            buttonPanel.add(new JLabel(AllIcons.Actions.CheckOut));
+//            buttonPanel.add(new JLabel(AllIcons.Actions.Commit));
+//            buttonPanel.add(new JLabel(AllIcons.Actions.Execute));
 
             // 直接添加，FlowLayout 会按顺序从左到右排列
             modulePanel.add(moduleTextRenderer);
