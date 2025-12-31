@@ -101,7 +101,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
                 try {
                     indicator.setIndeterminate(true);
                     tempClient.connect(uri, user, pwd);
-                    indicator.setText("Fetching project list...");
+                    indicator.setText(BapBundle.message("action.ProjectDownloadAction.progress.fetching_list"));
                     List<CJavaProjectDto> projects = tempClient.getService().getAllProjects();
 
                     ApplicationManager.getApplication().invokeLater(() -> {
