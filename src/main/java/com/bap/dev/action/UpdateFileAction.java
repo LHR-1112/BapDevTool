@@ -138,7 +138,6 @@ public class UpdateFileAction extends AnAction {
         // --- 🔴 修改结束 ---
 
         String projectUuid = getProjectUuid(moduleRoot);
-
         try {
             // 1. 尝试获取资源 (带内容 true)
             CResFileDto resDto = client.getService().getResFile(projectUuid, relativePath, false);
