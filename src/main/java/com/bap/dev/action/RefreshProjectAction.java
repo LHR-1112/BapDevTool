@@ -2,6 +2,7 @@ package com.bap.dev.action;
 
 import bap.java.CJavaConst; // 引入常量定义 .develop 文件名
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.util.BapUtils;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
@@ -27,15 +28,18 @@ public class RefreshProjectAction extends AnAction {
         VirtualFile moduleRoot = BapUtils.findModuleRoot(selectedFile);
 
         if (moduleRoot != null) {
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Module...", true) {
-                @Override
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.RefreshProjectAction.progress.refreshing"), true) { // "Refreshing Bap Module..."
+                //                @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     // 🔴 修改：传入 false，表示这是手动操作，需要弹窗报错
                     new ProjectRefresher(project).refreshModule(moduleRoot, false);
                 }
             });
         } else {
-            Messages.showWarningDialog("未找到模块配置文件 (.develop)。", "无法刷新");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到模块配置文件 (.develop)。"
+                    BapBundle.message("action.RefreshProjectAction.title.cannot_refresh")      // "无法刷新"
+            );
         }
     }
 
