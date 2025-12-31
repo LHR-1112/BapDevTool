@@ -9,7 +9,7 @@
         <idea-version since-build="223.0"/>
         <vendor>LHR</vendor>
         <description><![CDATA[
-            内部 BAP 调试开发插件
+            基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
     </plugin>
 </plugins>
