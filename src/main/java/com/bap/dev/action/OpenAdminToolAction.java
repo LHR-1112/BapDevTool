@@ -2,6 +2,7 @@ package com.bap.dev.action;
 
 import bap.java.CJavaConst;
 import com.bap.dev.handler.AdminToolLauncher;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -23,7 +24,10 @@ public class OpenAdminToolAction extends AnAction {
         // 查找模块根目录
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("请在 Bap 模块内使用此功能 (未找到 .develop 配置)。", "提示");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"),
+                    BapBundle.message("notification.error_title")
+            );
             return;
         }
 
