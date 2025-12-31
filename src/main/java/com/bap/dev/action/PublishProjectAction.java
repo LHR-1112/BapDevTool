@@ -2,6 +2,7 @@ package com.bap.dev.action;
 
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.notification.Notification;
@@ -38,13 +39,16 @@ public class PublishProjectAction extends AnAction {
         // 向上查找模块根目录
         VirtualFile moduleRoot = findModuleRoot(selectedFile);
         if (moduleRoot == null) {
-            Messages.showWarningDialog("未找到 .develop 配置文件，请在 Bap 模块内执行此操作。", "无法发布");
+            Messages.showWarningDialog(
+                    BapBundle.message("error.develop_not_found"), // "未找到 .develop 配置文件..."
+                    BapBundle.message("action.PublishProjectAction.title.cannot_publish")       // "无法发布"
+            );
             return;
         }
 
         // 启动后台任务
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Publishing Bap Project...", true) {
-            @Override
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.PublishProjectAction.progress.publishing_title"), true) { // "Publishing Bap Project..."
+            //            @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 performPublish(project, moduleRoot, indicator);
             }
@@ -62,19 +66,19 @@ public class PublishProjectAction extends AnAction {
             pwd = extractAttr(content, "Password");
             projectUuid = extractAttr(content, "Project");
         } catch (Exception e) {
-            showError("读取配置失败: " + e.getMessage());
+            showError(BapBundle.message("action.PublishProjectAction.error.read_config_prefix", e.getMessage())); // "读取配置失败: " + e.getMessage()
             return;
         }
 
         if (uri == null || projectUuid == null) {
-            showError("配置文件信息不全，无法发布。");
+            showError(BapBundle.message("action.PublishProjectAction.error.config_incomplete")); // "配置文件信息不全，无法发布。"
             return;
         }
 
         BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
             indicator.setIndeterminate(true);
-            indicator.setText("Connecting to server...");
+            indicator.setText(BapBundle.message("progress.connecting")); // "Connecting to server..." -> "Connecting..." (复用)
             client.connect(uri, user, pwd);
 
             // 读取全局配置: "发布时自动编译"
@@ -82,14 +86,14 @@ public class PublishProjectAction extends AnAction {
 
             if (compileOnPublish) {
                 // 如果配置为自动编译，则执行 rebuildAll
-                indicator.setText("Rebuilding project (" + projectUuid + ")...");
+                indicator.setText(BapBundle.message("action.PublishProjectAction.progress.rebuilding", projectUuid)); // "Rebuilding project (" + projectUuid + ")..."
                 client.getService().rebuildAll(projectUuid);
             } else {
-                indicator.setText("Skipping rebuild (See Bap Settings)...");
+                indicator.setText(BapBundle.message("action.PublishProjectAction.progress.skip_rebuild")); // "Skipping rebuild (See Bap Settings)..."
             }
 
             // 3. 执行 Export Plugin
-            indicator.setText("Exporting to plugin...");
+            indicator.setText(BapBundle.message("action.PublishProjectAction.progress.exporting")); // "Exporting to plugin..."
 
             // 逻辑：如果自动编译(true) -> 就不忽略错误(false)；如果不自动编译(false) -> 就忽略错误(true)
             boolean ignoreCompileError = !compileOnPublish;
@@ -97,11 +101,17 @@ public class PublishProjectAction extends AnAction {
             client.getService().exportProject2Plugin(projectUuid, null, true, ignoreCompileError);
 
             // 4. 成功通知
-            sendNotification(project, "发布成功", "项目已成功重新编译并导出插件。");
+            sendNotification(project,
+                    BapBundle.message("action.PublishProjectAction.notification.success_title"),   // "发布成功"
+                    BapBundle.message("action.PublishProjectAction.notification.success_content")  // "项目已成功重新编译并导出插件。"
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendNotification(project, "发布失败或存在编译报错", ToolUtilities.getFullExceptionStack(e));
+            sendNotification(project,
+                    BapBundle.message("action.PublishProjectAction.notification.fail_title"), // "发布失败或存在编译报错"
+                    ToolUtilities.getFullExceptionStack(e)
+            );
         } finally {
             client.shutdown();
         }
@@ -138,12 +148,13 @@ public class PublishProjectAction extends AnAction {
 
     private void showError(String msg) {
         ApplicationManager.getApplication().invokeLater(() ->
-                Messages.showErrorDialog(msg, "Publish Error"));
+                // 修改11: Error Dialog Title
+                Messages.showErrorDialog(msg, BapBundle.message("action.PublishProjectAction.dialog.error_title"))); // "Publish Error"
     }
 
     private void sendNotification(Project project, String title, String content) {
         Notification notification = new Notification(
-                "Cloud Project Download",
+                BapBundle.message("notification.group.cloud.download"), // 修改12: 复用 common 中的 group id,
                 title,
                 content,
                 NotificationType.INFORMATION
