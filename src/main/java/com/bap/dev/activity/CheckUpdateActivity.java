@@ -117,10 +117,12 @@ public class CheckUpdateActivity implements StartupActivity {
             String text = latest.changeNotes.trim();
             text = text.length() > 800 ? text.substring(0, 800) + "\n…" : text; // 防止通知太长
             notesHtml = "<br/><br/><b>更新内容：</b><br/>" + escapeHtml(text).replace("\n", "<br/>");
+        } else {
+            notesHtml = "<br/><br/>(无更新内容)";
         }
 
         String content = String.format(
-                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/> %s <br/>",
+                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/> %s",
                 latest.version, current, notesHtml
         );
 
