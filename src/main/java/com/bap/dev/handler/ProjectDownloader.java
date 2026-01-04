@@ -5,6 +5,7 @@ import bap.java.CJavaFolderDto;
 import bap.java.CJavaProjectDto;
 import cn.hutool.core.util.StrUtil;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.leavay.common.util.ProgressCtrl.ProgressControllerFEIntf;
 import com.leavay.common.util.ProgressCtrl.crpc.CProgressProxy;
@@ -43,7 +44,7 @@ public class ProjectDownloader {
             moduleFolder.mkdirs();
         }
 
-        System.out.println("Downloading Project [" + safeName + "] into [" + moduleFolder.getAbsolutePath() + "]");
+        System.out.println(BapBundle.message("handler.ProjectDownloader.log.downloading", safeName, moduleFolder.getAbsolutePath())); // "Downloading Project [...] into [...]"
 
         Set<String> folderSet = new HashSet<>();
         if (folders != null && !folders.isEmpty()) {
@@ -55,7 +56,7 @@ public class ProjectDownloader {
                     for (CJavaFolderDto f : allFolders) folderSet.add(f.getName());
                 }
             } catch (Exception e) {
-                System.err.println("Fetch folders failed, ignore.");
+                System.err.println(BapBundle.message("handler.ProjectDownloader.error.fetch_folders")); // "Fetch folders failed, ignore."
             }
         }
 
@@ -114,11 +115,11 @@ public class ProjectDownloader {
                                         indicator.setFraction(pct / 100.0);
 
                                         // 显示格式：已下载: 10.5 MB (50%)  |  速度: 2.0 MB/s
-                                        indicator.setText2("已下载: " + currentStr + " (" + pct + "%)  |  速度: " + speedStr);
+                                        indicator.setText2(BapBundle.message("handler.ProjectDownloader.status.progress_pct", currentStr, pct, speedStr));
                                     } else {
                                         // 还没收到进度
                                         indicator.setIndeterminate(true);
-                                        indicator.setText2("已下载: " + currentStr + "  |  速度: " + speedStr);
+                                        indicator.setText2(BapBundle.message("handler.ProjectDownloader.status.progress", currentStr, speedStr));
                                     }
 
                                     stats[1] = now;
@@ -134,10 +135,11 @@ public class ProjectDownloader {
                 client.getService().streamExportProject(srvProg, projectUuid, folderSet, null);
             }
 
-            System.out.println("Unzipping to: " + moduleFolder.getAbsolutePath());
+            System.out.println(BapBundle.message("handler.ProjectDownloader.log.unzipping_to", moduleFolder.getAbsolutePath())); // "Unzipping to: ..."
             if (indicator != null) {
                 indicator.setIndeterminate(true);
-                indicator.setText("正在解压文件...");
+                // 修改6: Indicator Text (复用 common)
+                indicator.setText(BapBundle.message("progress.unzipping")); // "正在解压文件..."
                 indicator.setText2("");
             }
 
@@ -147,7 +149,7 @@ public class ProjectDownloader {
             generateLaunchFile(moduleFolder);
 
         } catch (Exception e) {
-            if (isCancelException(e)) throw new InterruptedException("User Canceled");
+            if (isCancelException(e)) throw new InterruptedException(BapBundle.message("handler.ProjectDownloader.error.user_cancel")); // "User Canceled"
             throw e;
         } finally {
             if (tmpZip.exists()) tmpZip.delete();
