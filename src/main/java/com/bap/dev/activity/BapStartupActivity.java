@@ -1,6 +1,7 @@
 package com.bap.dev.activity;
 
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapDocumentListener;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -20,7 +21,7 @@ public class BapStartupActivity implements StartupActivity {
         EditorFactory.getInstance().getEventMulticaster().addDocumentListener(listener, project);
 
         // 2. 启动后台任务刷新所有模块
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.refresh_module"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 new ProjectRefresher(project).refreshAllModules();

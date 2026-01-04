@@ -1,5 +1,6 @@
 package com.bap.dev.activity;
 
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.plugins.*;
@@ -50,7 +51,10 @@ public class CheckUpdateActivity implements StartupActivity {
             } catch (Exception e) {
                 if (isManual) {
                     ApplicationManager.getApplication().invokeLater(() ->
-                                    Messages.showErrorDialog(project, "Check failed: " + e.getMessage(), "Update Error"),
+                                    // 修改1: Error Dialog
+                                    Messages.showErrorDialog(project,
+                                            BapBundle.message("activity.CheckUpdateActivity.error.check_failed", e.getMessage()), // "Check failed: " + e.getMessage()
+                                            BapBundle.message("title.update_error")), // "Update Error" (Common)
                             ModalityState.any());
                 }
                 e.printStackTrace();
@@ -69,7 +73,11 @@ public class CheckUpdateActivity implements StartupActivity {
         if (pluginDescriptor == null) {
             if (isManual) {
                 ApplicationManager.getApplication().invokeLater(() ->
-                        Messages.showErrorDialog(project, "Error: 找不到插件描述信息! ID: " + PLUGIN_ID, "Error"), ModalityState.any());
+                                // 修改2: Error Dialog
+                                Messages.showErrorDialog(project,
+                                        BapBundle.message("activity.CheckUpdateActivity.error.desc_not_found", PLUGIN_ID), // "Error: 找不到插件描述信息! ID: " + PLUGIN_ID
+                                        BapBundle.message("notification.error_title")), // "Error" (Common)
+                        ModalityState.any());
             }
             return;
         }
@@ -81,7 +89,11 @@ public class CheckUpdateActivity implements StartupActivity {
         if (latest == null || latest.version == null || latest.downloadUrl == null) {
             if (isManual) {
                 ApplicationManager.getApplication().invokeLater(() ->
-                        Messages.showErrorDialog(project, "无法从 plugins.xml 解析版本/下载地址", "Update Error"), ModalityState.any());
+                                // 修改3: Error Dialog
+                                Messages.showErrorDialog(project,
+                                        BapBundle.message("activity.CheckUpdateActivity.error.xml_parse"), // "无法从 plugins.xml 解析版本/下载地址"
+                                        BapBundle.message("title.update_error")), // "Update Error" (Common)
+                        ModalityState.any());
             }
             return;
         }
@@ -102,7 +114,9 @@ public class CheckUpdateActivity implements StartupActivity {
             );
         } else if (isManual) {
             ApplicationManager.getApplication().invokeLater(
-                    () -> Messages.showInfoMessage(project, "当前版本 (" + currentVersion + ") 已是最新。", "检查更新"),
+                    () -> Messages.showInfoMessage(project,
+                            BapBundle.message("activity.CheckUpdateActivity.info.latest", currentVersion), // "当前版本 (" + currentVersion + ") 已是最新。"
+                            BapBundle.message("title.check_update")), // "检查更新" (Common)
                     ModalityState.any()
             );
         }
@@ -125,26 +139,23 @@ public class CheckUpdateActivity implements StartupActivity {
         if (latestEntry.changeNotes != null && !latestEntry.changeNotes.isBlank()) {
             String text = latestEntry.changeNotes.trim();
             text = text.length() > 800 ? text.substring(0, 800) + "\n…" : text;
-            notesHtml = "<br/><br/><b>更新内容：</b><br/>" + escapeHtml(text).replace("\n", "<br/>");
+            notesHtml = BapBundle.message("activity.CheckUpdateActivity.html.notes_header") + escapeHtml(text).replace("\n", "<br/>"); // "<br/><br/><b>更新内容：</b><br/>" ...
         }
 
-        return String.format(
-                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/>%s",
-                latest, current, notesHtml
-        );
+        return BapBundle.message("activity.CheckUpdateActivity.html.detected", latest, current, notesHtml); // "检测到 Bap Plugin 新版本..."
     }
 
     private static void showUpdateModal(@Nullable Project project, String htmlContent, String latest, RepoEntry latestEntry) {
         String[] options = new String[] {
-                "更新并重启",
-                "GitHub下载",
-                "忽略此版本",
+                BapBundle.message("button.update_restart"), // "更新并重启"
+                BapBundle.message("button.github_download"), // "GitHub下载"
+                BapBundle.message("button.ignore_version"), // "忽略此版本"
         };
 
         int choice = Messages.showDialog(
                 project,
                 "<html>" + htmlContent + "</html>",
-                "Bap Plugin Update",
+                BapBundle.message("title.plugin_update"), // "Bap Plugin Update" (Common)
                 options,
                 -1,
                 Messages.getInformationIcon()
@@ -175,32 +186,35 @@ public class CheckUpdateActivity implements StartupActivity {
         if (latest.changeNotes != null && !latest.changeNotes.isBlank()) {
             String text = latest.changeNotes.trim();
             text = text.length() > 800 ? text.substring(0, 800) + "\n…" : text; // 防止通知太长
-            notesHtml = "<br/><br/><b>更新内容：</b><br/>" + escapeHtml(text).replace("\n", "<br/>");
+            notesHtml = BapBundle.message("activity.CheckUpdateActivity.html.notes_header") + escapeHtml(text).replace("\n", "<br/>");
         } else {
-            notesHtml = "<br/><br/>(无更新内容)";
+            notesHtml = BapBundle.message("activity.CheckUpdateActivity.html.no_notes"); // "<br/><br/>(无更新内容)"
         }
 
-        String content = String.format(
-                "检测到 Bap Plugin 新版本: <b>%s</b> (当前: %s)<br/> %s",
-                latest.version, current, notesHtml
-        );
+        String content = BapBundle.message("activity.CheckUpdateActivity.html.detected", latest.version, current, notesHtml);
 
-        Notification n = group.createNotification("Bap Plugin Update", content, NotificationType.INFORMATION);
+        Notification n = group.createNotification(
+                BapBundle.message("title.plugin_update"), // "Bap Plugin Update" (Common)
+                content,
+                NotificationType.INFORMATION);
 
-        n.addAction(NotificationAction.createSimple("忽略此版本", () -> {
+        n.addAction(NotificationAction.createSimple(BapBundle.message("button.ignore_version"), () -> { // "忽略此版本"
             BapSettingsState.getInstance().ignoredVersion = latest.version;
             n.expire();
         }));
 
-        n.addAction(NotificationAction.createSimple("GitHub下载", () -> {
+        n.addAction(NotificationAction.createSimple(BapBundle.message("button.github_download"), () -> { // "GitHub下载"
             if (latest.backupUrl != null && !latest.backupUrl.isBlank()) {
                 BrowserUtil.browse(latest.backupUrl);
             } else {
-                Messages.showInfoMessage(project, "未配置 GitHub 备份下载链接。", "Info");
+                // 修改11: Info Message
+                Messages.showInfoMessage(project,
+                        BapBundle.message("activity.CheckUpdateActivity.info.no_github"), // "未配置 GitHub 备份下载链接。"
+                        BapBundle.message("title.tip")); // "Info" -> "Tip" (Common)
             }
         }));
 
-        n.addAction(NotificationAction.createSimple("立即更新并重启", () -> {
+        n.addAction(NotificationAction.createSimple(BapBundle.message("button.update_restart"), () -> { // "立即更新并重启" (复用 common)
             n.expire();
             downloadAndInstall(project, latest);
         }));
@@ -217,22 +231,22 @@ public class CheckUpdateActivity implements StartupActivity {
     }
 
     private static void downloadAndInstall(@Nullable Project project, RepoEntry latest) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Updating Plugin...", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("activity.CheckUpdateActivity.progress.updating"), true) { // "Updating Plugin..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
-                    indicator.setText("Downloading version " + latest.version + "...");
+                    indicator.setText(BapBundle.message("activity.CheckUpdateActivity.progress.downloading", latest.version)); // "Downloading version..."
                     String fileName = "BapDevPlugin-" + latest.version + ".zip";
                     File zipFile = downloadToTemp(latest.downloadUrl, fileName);
 
-                    indicator.setText("Installing...");
+                    indicator.setText(BapBundle.message("activity.CheckUpdateActivity.progress.installing")); // "Installing..."
                     ApplicationManager.getApplication().invokeLater(() -> {
                         try {
                             installPluginZipAfterRestart(zipFile);
 
                             int result = Messages.showYesNoDialog(project,
-                                    "插件更新已下载并准备就绪。\n需要重启 IDE 才能生效，是否立即重启？",
-                                    "Restart IDE",
+                                    BapBundle.message("activity.CheckUpdateActivity.dialog.restart_msg"), // "插件更新已下载..."
+                                    BapBundle.message("title.restart_ide"), // "Restart IDE" (Common)
                                     Messages.getQuestionIcon());
 
                             if (result == Messages.YES) {
@@ -240,14 +254,20 @@ public class CheckUpdateActivity implements StartupActivity {
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
-                            Messages.showErrorDialog(project, "安装失败: " + e.getMessage(), "Update Error");
+                            // 修改15: Error
+                            Messages.showErrorDialog(project,
+                                    BapBundle.message("activity.CheckUpdateActivity.error.install_failed", e.getMessage()), // "安装失败: "
+                                    BapBundle.message("title.update_error")); // Common
                         }
                     });
 
                 } catch (Exception e) {
                     e.printStackTrace();
                     ApplicationManager.getApplication().invokeLater(() ->
-                            Messages.showErrorDialog(project, "下载失败: " + e.getMessage(), "Update Error"));
+                            // 修改16: Error
+                            Messages.showErrorDialog(project,
+                                    BapBundle.message("activity.CheckUpdateActivity.error.download_failed", e.getMessage()), // "下载失败: "
+                                    BapBundle.message("title.update_error"))); // Common
                 }
             }
         });
@@ -263,7 +283,7 @@ public class CheckUpdateActivity implements StartupActivity {
         Path zipPath = pluginZip.toPath();
         IdeaPluginDescriptor descriptor = PluginDescriptorLoader.loadDescriptorFromArtifact(zipPath, null);
         if (descriptor == null) {
-            throw new IOException("无法解析插件描述符: " + pluginZip.getAbsolutePath());
+            throw new IOException(BapBundle.message("activity.CheckUpdateActivity.error.descriptor_io", pluginZip.getAbsolutePath())); // "无法解析插件描述符..."
         }
 
         // 2. 尝试查找已安装的旧路径
@@ -299,7 +319,7 @@ public class CheckUpdateActivity implements StartupActivity {
             return;
         } catch (NoSuchMethodException ignored) {}
 
-        throw new UnsupportedOperationException("当前 IDE 版本不支持 installAfterRestart 安装接口，请尝试从Github下载更新并安装");
+        throw new UnsupportedOperationException(BapBundle.message("activity.CheckUpdateActivity.error.api_unsupported")); // "当前 IDE 版本不支持..."
     }
 
     // ... (RepoEntry, parseRepoEntry, extractAttr, normalizeVersion, compareVersion, safeInt, downloadToTemp 保持不变) ...
@@ -389,7 +409,7 @@ public class CheckUpdateActivity implements StartupActivity {
         });
 
         if (!out.exists() || out.length() < 1024) {
-            throw new IllegalStateException("下载失败或文件过小: " + out.getAbsolutePath());
+            throw new IllegalStateException(BapBundle.message("activity.CheckUpdateActivity.error.file_small", out.getAbsolutePath())); // "下载失败或文件过小..."
         }
         return out;
     }
