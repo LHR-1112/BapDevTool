@@ -3,6 +3,7 @@ package com.bap.dev.handler;
 import bap.java.CJavaConst;
 import bap.java.CJavaProjectDto;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.settings.BapSettingsState;
 import com.bap.dev.ui.LogonDialog;
 import com.bap.dev.ui.RelocateDialog;
@@ -72,10 +73,13 @@ public class RelocateHandler {
                             // 更新一下历史记录的顺序（置顶）
                             BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
 
-                            Messages.showInfoMessage("Successfully switched back to project:\n" + profile.projectName, "Relocated");
+                            Messages.showInfoMessage(
+                                    BapBundle.message("handler.RelocateHandler.info.switched_back", profile.projectName), // "Successfully switched back to project:\n" + profile.projectName
+                                    BapBundle.message("handler.RelocateHandler.title.relocated") // "Relocated"
+                            );
                             return; // 结束，不走网络连接
                         } catch (IOException e) {
-                            showError("Failed to write config: " + e.getMessage(), project);
+                            showError(BapBundle.message("handler.RelocateHandler.error.write_config", e.getMessage()), project); // "Failed to write config: " + e.getMessage()
                             // 写入失败，可能想走新连接，继续往下流转
                         }
                     }
@@ -100,20 +104,20 @@ public class RelocateHandler {
         // 3. 后台连接并获取列表
         BapRpcClient client = new BapRpcClient();
 
-        ProgressManager.getInstance().run(new Task.Modal(project, "Connecting to " + newUri + "...", true) {
+        ProgressManager.getInstance().run(new Task.Modal(project, BapBundle.message("handler.RelocateHandler.progress.connecting_target", newUri), true) { // "Connecting to " + newUri + "..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     indicator.setIndeterminate(true);
                     client.connect(newUri, newUser, newPwd);
 
-                    indicator.setText("Fetching project list...");
+                    indicator.setText(BapBundle.message("handler.RelocateHandler.progress.fetching")); // "Fetching project list..."
                     List<CJavaProjectDto> projects = client.getService().getAllProjects();
 
                     // 4. UI 线程弹出工程选择框 (Step 2)
                     ApplicationManager.getApplication().invokeLater(() -> {
                         if (projects == null || projects.isEmpty()) {
-                            showError("连接成功，但未获取到任何工程列表。", project);
+                            showError(BapBundle.message("handler.RelocateHandler.error.no_projects"), project); // "连接成功，但未获取到任何工程列表。"
                             client.shutdown();
                             return;
                         }
@@ -133,9 +137,12 @@ public class RelocateHandler {
                                     BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
                                     // ----------------------------
 
-                                    Messages.showInfoMessage("Project relocated to: " + selected.getName() + "\nServer: " + newUri, "Success");
+                                    Messages.showInfoMessage(
+                                            BapBundle.message("handler.RelocateHandler.info.relocated_msg", selected.getName(), newUri), // "Project relocated to: " + selected.getName() + "\nServer: " + newUri
+                                            BapBundle.message("title.success") // "Success" (Common)
+                                    );
                                 } catch (Exception e) {
-                                    showError("保存配置失败: " + e.getMessage(), project);
+                                    showError(BapBundle.message("handler.RelocateHandler.error.save_config", e.getMessage()), project); // "保存配置失败: " + e.getMessage()
                                 }
                             }
                         }
@@ -143,7 +150,7 @@ public class RelocateHandler {
                     });
 
                 } catch (Exception e) {
-                    showError("连接失败: " + e.getMessage(), project);
+                    showError(BapBundle.message("action.ProjectDownloadAction.error.connect_prefix", e.getMessage()), project); // 复用 "连接失败: " + e.getMessage()
                     client.shutdown();
                 }
             }
@@ -174,6 +181,9 @@ public class RelocateHandler {
     }
 
     private static void showError(String msg, Project project) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, msg, "Relocate Error"));
+        ApplicationManager.getApplication().invokeLater(() ->
+                // 修改9: Error Dialog Title
+                Messages.showErrorDialog(project, msg, BapBundle.message("handler.RelocateHandler.title.error")) // "Relocate Error"
+        );
     }
 }
