@@ -4,6 +4,7 @@ import bap.java.CJavaCenterIntf;
 import bap.java.CJavaConst;
 import bap.java.FileUpdatePackage;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.leavay.common.util.ProgressCtrl.ProgressControllerFEIntf;
 import com.leavay.common.util.ProgressCtrl.crpc.CProgressProxy;
@@ -12,6 +13,7 @@ import com.leavay.nio.crpc.CRpcAdapter;
 
 import java.io.*;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,7 +43,7 @@ public class LibDownloader {
         File projectLibPath = new File(projectRoot, CJavaConst.PATH_EXPORT_Project);
 
         // 1. 扫描本地文件 MD5
-        indicator.setText("Scanning local files...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.scanning")); // "Scanning local files..."
         Map<String, String> pfMapMd5 = new HashMap<>();
         Map<String, String> pjMapMd5 = new HashMap<>();
         long daoTag = -1;
@@ -69,7 +71,7 @@ public class LibDownloader {
         }
 
         // 2. DAO Model
-        indicator.setText("Downloading DAO model...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.dao")); // "Downloading DAO model..."
         indicator.setFraction(0.1);
         byte[] btDao = intf.exportModelFile(daoTag);
         if (btDao != null) {
@@ -77,12 +79,12 @@ public class LibDownloader {
         }
 
         // 3. Plugin Jars
-        indicator.setText("Downloading plugin jars...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.plugin")); // "Downloading plugin jars..."
         indicator.setFraction(0.3);
         updatePluginJars(intf, projectUuid, getSrcFolders(), indicator);
 
         // 4. Open Source
-        indicator.setText("Downloading open source...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.opensource")); // "Downloading open source..."
         indicator.setFraction(0.4);
         byte[] btSrc = intf.exportOpenSource(srcMd5);
         if (btSrc != null) {
@@ -91,7 +93,7 @@ public class LibDownloader {
         }
 
         // 5. Platform Jars (增量更新)
-        indicator.setText("Downloading platform libraries...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.platform")); // "Downloading platform libraries..."
         indicator.setFraction(0.5);
         File tmpPlatformZip = File.createTempFile("platform_update", ".zip");
         try (OutputStream out = new FileOutputStream(tmpPlatformZip)) {
@@ -106,7 +108,7 @@ public class LibDownloader {
                     }
                 } catch (IOException e) {
                     // Lambda 不允许抛出受检异常，必须包装成 RuntimeException
-                    throw new RuntimeException("Failed to write stream data", e);
+                    throw new RuntimeException(BapBundle.message("action.LibDownloader.error.write_stream"), e); // "Failed to write stream data"
                 }
             });
             // -------------------------------------------
@@ -128,7 +130,7 @@ public class LibDownloader {
         }
 
         // 6. Project Jars
-        indicator.setText("Downloading project libraries...");
+        indicator.setText(BapBundle.message("action.LibDownloader.progress.project")); // "Downloading project libraries..."
         indicator.setFraction(0.8);
         Object pProjectJarPkgObj = intf.exportProjectJars(projectUuid, pjMapMd5);
 
@@ -283,6 +285,6 @@ public class LibDownloader {
     }
 
     private String readFileUtf8(File f) {
-        try { return new String(Files.readAllBytes(f.toPath()), "UTF-8"); } catch (Exception e) { return ""; }
+        try { return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8); } catch (Exception e) { return ""; }
     }
 }
