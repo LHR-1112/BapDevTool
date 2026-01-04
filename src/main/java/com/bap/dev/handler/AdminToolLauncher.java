@@ -1,6 +1,7 @@
 package com.bap.dev.handler;
 
 import bap.java.CJavaConst;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.JavaParameters;
 import com.intellij.execution.process.OSProcessHandler;
@@ -35,7 +36,7 @@ public class AdminToolLauncher {
     public static void launch(Project project, VirtualFile moduleRoot) {
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
         if (!confFile.exists()) {
-            showError(project, "未找到配置文件: " + confFile.getName());
+            showError(project, BapBundle.message("warning.no_develop_config", confFile.getName())); // "未找到配置文件: " + confFile.getName()
             return;
         }
 
@@ -59,7 +60,7 @@ public class AdminToolLauncher {
                 projectSdk = ProjectJdkTable.getInstance().findMostRecentSdkOfType(JavaSdk.getInstance());
             }
             if (projectSdk == null) {
-                showError(project, "未找到有效的 JDK。");
+                showError(project, BapBundle.message("action.AdminToolLauncher.error.no_jdk")); // "未找到有效的 JDK。"
                 return;
             }
             params.setJdk(projectSdk);
@@ -124,18 +125,22 @@ public class AdminToolLauncher {
 
                 @Override
                 public void processTerminated(@NotNull ProcessEvent event) {
-                    String msg = "管理工具已关闭 (Exit Code: " + event.getExitCode() + ")";
-                    sendNotification(project, "管理工具已关闭", msg);
+                    String msg = BapBundle.message("action.AdminToolLauncher.notification.closed_content", event.getExitCode()); // "管理工具已关闭 (Exit Code: " + event.getExitCode() + ")"
+                    sendNotification(project,
+                            BapBundle.message("action.AdminToolLauncher.notification.closed_title"), // "管理工具已关闭"
+                            msg);
                 }
             });
 
             handler.startNotify();
 
-            sendNotification(project, "启动成功", "管理工具已启动 (Target: " + host + ":" + port + ")");
+            sendNotification(project,
+                    BapBundle.message("action.AdminToolLauncher.notification.success_title"), // "启动成功"
+                    BapBundle.message("action.AdminToolLauncher.notification.success_content", host, port)); // "管理工具已启动 (Target: " + host + ":" + port + ")"
 
         } catch (Exception e) {
             e.printStackTrace();
-            showError(project, "启动失败: " + e.getMessage());
+            showError(project, BapBundle.message("action.AdminToolLauncher.error.launch_failed", e.getMessage())); // "启动失败: " + e.getMessage()
         }
     }
 
@@ -170,11 +175,13 @@ public class AdminToolLauncher {
     }
 
     private static void showError(Project project, String msg) {
-        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, "Launcher Error"));
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(msg, BapBundle.message("action.AdminToolLauncher.title.error"))); // "Launcher Error"
     }
 
     private static void sendNotification(Project project, String title, String content) {
-        Notification notification = new Notification("Cloud Project Download", title, content, NotificationType.INFORMATION);
+        Notification notification = new Notification(
+                BapBundle.message("notification.group.cloud.download"), // "Cloud Project Download"
+                title, content, NotificationType.INFORMATION);
         Notifications.Bus.notify(notification, project);
     }
 }
