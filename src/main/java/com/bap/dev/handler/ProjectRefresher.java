@@ -5,6 +5,7 @@ import bap.dev.JavaDto;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
@@ -59,7 +60,7 @@ public class ProjectRefresher {
             for (VirtualFile root : contentRoots) {
                 // 只要根目录下有 .develop 文件，就认为是 Bap 模块
                 if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
-                    System.out.println("Auto-refreshing module: " + module.getName());
+                    System.out.println(BapBundle.message("handler.ProjectRefresher.log.auto_refresh", module.getName())); // "Auto-refreshing module: " + module.getName()
                     refreshModule(root, true);
                     // 一个模块刷新一次即可 (假设只有一个根是 Bap 根)
                     break;
@@ -101,13 +102,21 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 配置文件损坏提示
-            showError("配置读取失败", "无法读取 .develop 配置文件: " + e.getMessage(), silentMode);
+            showError(
+                    BapBundle.message("error.read_config", e.getMessage()), // "配置读取失败" (Key suggestion, matching CN: title.config_error or specific)
+                    BapBundle.message("warning.no_develop_config"), // "无法读取 .develop 配置文件: " + e.getMessage()
+                    silentMode
+            );
             return;
         }
 
         if (uri == null || projectUuid == null) {
             // 🔴 关键信息缺失提示
-            showError("配置不完整", "配置文件中缺少 Uri 或 Project 属性，请检查 .develop 文件。", silentMode);
+            showError(
+                    BapBundle.message("error.config_incomplete"),
+                    BapBundle.message("error.config_incomplete"),
+                    silentMode
+            );
             return;
         }
 
@@ -118,7 +127,11 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 连接/鉴权失败提示 (这里会捕获密码错误)
-            showError("连接失败", "无法连接到服务器 [" + uri + "]。\n\n可能原因：\n1. 账号或密码错误\n2. 网络连接异常\n3. 服务端未启动\n\n详细错误: " + e.getMessage(), silentMode);
+            showError(
+                    BapBundle.message("title.connection_failed"), // "连接失败" (Common)
+                    BapBundle.message("handler.ProjectRefresher.error.connect_detail", uri, e.getMessage()), // "无法连接到服务器..."
+                    silentMode
+            );
             return;
         }
 
@@ -158,7 +171,11 @@ public class ProjectRefresher {
         } catch (Exception e) {
             e.printStackTrace();
             // 🔴 刷新过程中的其他异常
-            showError("刷新异常", "同步过程中发生未知错误: " + e.getMessage(), silentMode);
+            showError(
+                    BapBundle.message("title.refresh_exception"), // "刷新异常" (Common)
+                    BapBundle.message("handler.ProjectRefresher.error.unknown", e.getMessage()), // "同步过程中发生未知错误: " + e.getMessage()
+                    silentMode
+            );
         }
     }
 
@@ -208,7 +225,7 @@ public class ProjectRefresher {
                 createResourcePlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            System.err.println("Failed to refresh res folder: " + e.getMessage());
+            System.err.println(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage())); // "Failed to refresh res folder: " + e.getMessage()
         }
     }
 
@@ -217,7 +234,7 @@ public class ProjectRefresher {
             CResFileDto resFile = client.getService().getResFile(projectUuid, relativePath, false);
             if (resFile != null) {
                 statusService.setStatus(file, BapFileStatus.NORMAL);
-                System.out.println("Double check found file: " + relativePath);
+                System.out.println(BapBundle.message("handler.ProjectRefresher.log.double_check", relativePath)); // "Double check found file: " + relativePath
             } else {
                 statusService.setStatus(file, BapFileStatus.ADDED);
             }
@@ -255,7 +272,7 @@ public class ProjectRefresher {
                 createJavaPlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            System.err.println("Failed to refresh java folder: " + folderName);
+            System.err.println(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", folderName)); // "Failed to refresh java folder: " + folderName
         }
     }
 
