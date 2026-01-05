@@ -1,5 +1,6 @@
 package com.bap.dev.ui;
 
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
@@ -19,7 +20,7 @@ public class LogonDialog extends DialogWrapper {
 
     public LogonDialog(@Nullable Project project, String defaultUri, String defaultUser, String defaultPwd) {
         super(project);
-        setTitle("Connect to Bap Server");
+        setTitle(BapBundle.message("ui.LogonDialog.title")); // "Connect to Bap Server"
 
         setupUriCombo(defaultUri);
 
@@ -72,9 +73,9 @@ public class LogonDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("Server URI:", uriCombo)
-                .addLabeledComponent("User:", userField)
-                .addLabeledComponent("Password:", pwdField)
+                .addLabeledComponent(BapBundle.message("label.server_uri"), uriCombo) // "Server URI:"
+                .addLabeledComponent(BapBundle.message("label.user"), userField)      // "User:"
+                .addLabeledComponent(BapBundle.message("label.password"), pwdField)   // "Password:"
                 .getPanel();
     }
 
