@@ -64,7 +64,7 @@ public class CommitFileAction extends AnAction {
             Messages.showWarningDialog(
                     BapBundle.message("warning.no_develop_config"),
                     BapBundle.message("notification.error_title")
-                    );
+            );
             return;
         }
 
@@ -256,18 +256,19 @@ public class CommitFileAction extends AnAction {
     private void onSuccess(Project project, VirtualFile[] files, VirtualFile moduleRoot) {
         ApplicationManager.getApplication().invokeLater(() -> {
             List<VirtualFile> toDelete = new ArrayList<>();
+            BapFileStatusService statusService = BapFileStatusService.getInstance(project);
 
             for (VirtualFile file : files) {
                 // 1. 先获取当前状态
                 BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
 
-                // 2. 如果是 DELETED_LOCALLY (红D)，加入待删除列表
                 if (status == BapFileStatus.DELETED_LOCALLY) {
-                    toDelete.add(file);
-                }
-                // 3. 只有非删除状态的文件，才立即重置为 NORMAL
-                else if (file.isValid()) {
-                    BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
+                    // 对于红D文件，直接清除状态即可，不需要物理删除
+                    // 🔴 关键：使用 getPath() 确保清除的是 Map 中的 Key
+                    statusService.setStatus(file.getPath(), BapFileStatus.NORMAL);
+                } else if (file.isValid()) {
+                    // 对于存在的物理文件，先设为 Normal
+                    statusService.setStatus(file, BapFileStatus.NORMAL);
                     file.refresh(false, false);
                 }
             }
@@ -277,11 +278,12 @@ public class CommitFileAction extends AnAction {
                 try {
                     WriteAction.run(() -> {
                         for(VirtualFile f : toDelete) {
-                            // 为了状态服务的数据一致性，删除前置为 Normal
+                            // 1. 清除状态
                             BapFileStatusService.getInstance(project).setStatus(f, BapFileStatus.NORMAL);
 
-                            // 执行物理删除
-                            if(f.isValid()) {
+                            // 2. 🔴 关键修复：只有当文件在本地文件系统时才执行物理删除
+                            // LightVirtualFile (我们创建的红D文件) 不在本地文件系统，且本来就是“不存在”的，所以不需要删
+                            if (f.isValid() && f.isInLocalFileSystem()) {
                                 try {
                                     f.delete(this);
                                 } catch (java.io.IOException e) {
@@ -309,10 +311,19 @@ public class CommitFileAction extends AnAction {
     private String getOwnerFolderName(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile srcDir = moduleRoot.findChild("src");
         if (srcDir == null) return null;
-        String path = VfsUtilCore.getRelativePath(file, srcDir);
-        if (path == null) return null;
-        int idx = path.indexOf('/');
-        return (idx > 0) ? path.substring(0, idx) : path;
+
+        // 兼容 BapDeletedVirtualFile (LightFileSystem) vs LocalFileSystem
+        String srcPath = srcDir.getPath().replace('\\', '/');
+        String filePath = file.getPath().replace('\\', '/');
+
+        if (!filePath.startsWith(srcPath)) return null;
+
+        String relative = filePath.substring(srcPath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+        if (relative.isEmpty()) return null;
+
+        int idx = relative.indexOf('/');
+        return (idx > 0) ? relative.substring(0, idx) : relative;
     }
 
     private String findFolderUuid(List<CJavaFolderDto> folders, String name) {
@@ -332,11 +343,21 @@ public class CommitFileAction extends AnAction {
 
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null ? VfsUtilCore.getRelativePath(file, resDir) : null;
+        if (resDir == null) return null;
+
+        String resPath = resDir.getPath().replace('\\', '/');
+        String filePath = file.getPath().replace('\\', '/');
+
+        if (!filePath.startsWith(resPath)) return null;
+
+        String relative = filePath.substring(resPath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+        return relative.isEmpty() ? null : relative;
     }
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
+            // 1) 有内容时优先走 PSI（最准确）
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -346,26 +367,50 @@ public class CommitFileAction extends AnAction {
                     return pkg.isEmpty() ? cls : pkg + "." + cls;
                 }
             }
-            VirtualFile parent = file.getParent();
+
+            // 2) 红D / 无 PSI 时：用“路径字符串”计算，避免 LightFileSystem vs LocalFileSystem 导致的 relativePath=null
             VirtualFile srcDir = null;
+
+            // 2.1 先尝试从 parent 链找到 src
+            VirtualFile parent = file.getParent();
             while (parent != null) {
                 if ("src".equals(parent.getName())) { srcDir = parent; break; }
                 parent = parent.getParent();
             }
-            if (srcDir != null) {
-                String path = VfsUtilCore.getRelativePath(file, srcDir);
-                if (path != null) {
-                    int slash = path.indexOf('/');
-                    if (slash > 0) {
-                        String pkgPath = path.substring(slash + 1);
-                        if (pkgPath.endsWith(".java")) pkgPath = pkgPath.substring(0, pkgPath.length() - 5);
-                        return pkgPath.replace('/', '.');
-                    }
+
+            // 2.2 如果 parent 链不可靠（例如 parent 被兜底成 moduleRoot），退化为从模块根目录找 src
+            if (srcDir == null) {
+                VirtualFile moduleRoot = findModuleRoot(file);
+                if (moduleRoot != null) {
+                    srcDir = moduleRoot.findChild("src");
                 }
             }
-            return null;
+
+            if (srcDir == null) return null;
+
+            String srcPath = srcDir.getPath().replace('\\', '/');
+            String filePath = file.getPath().replace('\\', '/');
+
+            if (!filePath.startsWith(srcPath)) return null;
+
+            String relative = filePath.substring(srcPath.length());
+            if (relative.startsWith("/")) relative = relative.substring(1);
+            if (relative.isEmpty()) return null;
+
+            // 3) 关键：去掉 src 下的第一段目录（例如 src/java/... -> 去掉 "java"）
+            int slash = relative.indexOf('/');
+            if (slash > 0) {
+                relative = relative.substring(slash + 1);
+            }
+
+            if (relative.toLowerCase().endsWith(".java")) {
+                relative = relative.substring(0, relative.length() - 5);
+            }
+
+            return relative.replace('/', '.').replace('\\', '.');
         });
     }
+
 
     private VirtualFile findModuleRoot(VirtualFile current) {
         VirtualFile dir = current.isDirectory() ? current : current.getParent();

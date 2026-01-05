@@ -354,26 +354,22 @@ public class ProjectRefresher {
         createPlaceholderCommon(dirRoot, missingMap.keySet(), statusService);
     }
 
+    // --- 🔴 核心修改：仅记录状态，不创建文件 ---
     private void createPlaceholderCommon(VirtualFile dirRoot, java.util.Set<String> missingPaths, BapFileStatusService statusService) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            WriteAction.run(() -> {
-                for (String relativePath : missingPaths) {
-                    try {
-                        if (relativePath == null) continue;
-                        // 🔴 过滤：如果云端传来的列表里有 .DS_Store (虽然少见但可能)，也忽略
-                        if (relativePath.contains(".DS_Store")) continue;
-                        File ioFile = new File(dirRoot.getPath(), relativePath);
-                        if (!ioFile.exists()) {
-                            ioFile.getParentFile().mkdirs();
-                            ioFile.createNewFile();
-                        }
-                        VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(ioFile);
-                        if (vFile != null) {
-                            statusService.setStatus(vFile, BapFileStatus.DELETED_LOCALLY);
-                        }
-                    } catch (IOException e) {}
-                }
-            });
+            for (String relativePath : missingPaths) {
+                // 1. 过滤垃圾文件
+                if (relativePath == null || relativePath.contains(".DS_Store")) continue;
+
+                // 2. 构造绝对路径
+                File ioFile = new File(dirRoot.getPath(), relativePath);
+                String fullPath = ioFile.getAbsolutePath().replace(File.separatorChar, '/');
+
+                // 3. 🔴 仅设置状态，不创建文件
+                // 注意：请确保 BapFileStatusService 提供了 setStatus(String, BapFileStatus) 方法
+                // 如果只有 setStatus(VirtualFile, ...)，你需要添加该重载方法，因为此时 VirtualFile 不存在。
+                statusService.setStatus(fullPath, BapFileStatus.DELETED_LOCALLY);
+            }
         });
     }
 

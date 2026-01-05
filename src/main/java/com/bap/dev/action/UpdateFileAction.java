@@ -25,6 +25,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.FileStatusManager;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
@@ -213,22 +214,38 @@ public class UpdateFileAction extends AnAction {
 
     // --- 统一的文件操作 ---
 
+    // 🔴 修改：overwriteFile 方法
+    // 强制穿透内存文件，写入物理磁盘
     private void overwriteFile(Project project, VirtualFile file, byte[] content) {
-        // 使用 invokeAndWait 确保在循环继续前文件已写完，或者用 invokeLater 异步排队
-        // 在批量操作中，invokeLater 是安全的
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 WriteAction.run(() -> {
-                    file.setBinaryContent(content);
+                    // 1. 准备物理文件对象
+                    File ioFile = new File(file.getPath());
 
-                    com.intellij.openapi.editor.Document doc = FileDocumentManager.getInstance().getDocument(file);
-                    if (doc != null) FileDocumentManager.getInstance().reloadFromDisk(doc);
+                    // 2. 确保父目录存在
+                    if (!ioFile.getParentFile().exists()) {
+                        ioFile.getParentFile().mkdirs();
+                    }
 
-                    BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
-                    file.refresh(false, false);
+                    // 3. 写入物理磁盘 (覆盖 LightVirtualFile 无法写入磁盘的问题)
+                    Files.write(ioFile.toPath(), content);
+
+                    // 4. 关键：刷新 VFS 以获取真正的 VirtualFile
+                    // 使用 refreshAndFindFileByIoFile 让 IDEA 感知到磁盘上的新文件
+                    VirtualFile realFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(ioFile);
+
+                    // 5. 设置状态并刷新
+// 兼容：statusMap 里存的是“路径字符串”，所以无论 realFile 是否拿到，都先按 path 清一次
+                    BapFileStatusService.getInstance(project).setStatus(file.getPath(), BapFileStatus.NORMAL);
+
+                    if (realFile != null) {
+                        BapFileStatusService.getInstance(project).setStatus(realFile, BapFileStatus.NORMAL);
+                        realFile.refresh(false, false);
+                    }
                 });
             } catch (Exception e) {
-                showError(BapBundle.message("action.UpdateFileAction.error.write_failed", e.getMessage())); // "写入文件失败: " + e.getMessage()
+                showError(BapBundle.message("action.UpdateFileAction.error.write_failed", e.getMessage()));
             }
         });
     }
@@ -237,14 +254,20 @@ public class UpdateFileAction extends AnAction {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 WriteAction.run(() -> {
-                    BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
-                    file.delete(this);
+                    // 红D(LightVirtualFile) 没有物理文件：只清状态即可；物理文件则顺便删除
+                    BapFileStatusService svc = BapFileStatusService.getInstance(project);
+                    svc.setStatus(file.getPath(), BapFileStatus.NORMAL);
+
+                    if (file.isValid() && file.isInLocalFileSystem()) {
+                        file.delete(this);
+                    }
                 });
             } catch (Exception e) {
                 showError(BapBundle.message("action.UpdateFileAction.error.delete_failed", e.getMessage())); // "删除失败: " + e.getMessage()
             }
         });
     }
+
 
     private String getProjectUuid(VirtualFile moduleRoot) throws Exception {
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
@@ -259,11 +282,21 @@ public class UpdateFileAction extends AnAction {
 
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null ? VfsUtilCore.getRelativePath(file, resDir) : null;
+        if (resDir == null) return null;
+
+        String resPath = resDir.getPath().replace('\\', '/');
+        String filePath = file.getPath().replace('\\', '/');
+
+        if (!filePath.startsWith(resPath)) return null;
+
+        String relative = filePath.substring(resPath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+        return relative.isEmpty() ? null : relative;
     }
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
+            // 1) 有内容时优先走 PSI（最准确）
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -273,26 +306,50 @@ public class UpdateFileAction extends AnAction {
                     return pkg.isEmpty() ? cls : pkg + "." + cls;
                 }
             }
-            VirtualFile parent = file.getParent();
+
+            // 2) 红D / 无 PSI 时：用“路径字符串”计算，避免 LightFileSystem vs LocalFileSystem 导致的 relativePath=null
             VirtualFile srcDir = null;
+
+            // 2.1 先尝试从 parent 链找到 src
+            VirtualFile parent = file.getParent();
             while (parent != null) {
                 if ("src".equals(parent.getName())) { srcDir = parent; break; }
                 parent = parent.getParent();
             }
-            if (srcDir != null) {
-                String path = VfsUtilCore.getRelativePath(file, srcDir);
-                if (path != null) {
-                    int slash = path.indexOf('/');
-                    if (slash > 0) {
-                        String pkgPath = path.substring(slash + 1);
-                        if (pkgPath.endsWith(".java")) pkgPath = pkgPath.substring(0, pkgPath.length() - 5);
-                        return pkgPath.replace('/', '.');
-                    }
+
+            // 2.2 如果 parent 链不可靠（例如 parent 被兜底成 moduleRoot），退化为从模块根目录找 src
+            if (srcDir == null) {
+                VirtualFile moduleRoot = findModuleRoot(file);
+                if (moduleRoot != null) {
+                    srcDir = moduleRoot.findChild("src");
                 }
             }
-            return null;
+
+            if (srcDir == null) return null;
+
+            String srcPath = srcDir.getPath().replace('\\', '/');
+            String filePath = file.getPath().replace('\\', '/'); // BapDeletedVirtualFile 返回绝对路径
+
+            if (!filePath.startsWith(srcPath)) return null;
+
+            String relative = filePath.substring(srcPath.length());
+            if (relative.startsWith("/")) relative = relative.substring(1);
+            if (relative.isEmpty()) return null;
+
+            // 3) 关键：去掉 src 下的第一段目录（例如 src/java/... -> 去掉 "java"）
+            int slash = relative.indexOf('/');
+            if (slash > 0) {
+                relative = relative.substring(slash + 1);
+            }
+
+            if (relative.toLowerCase().endsWith(".java")) {
+                relative = relative.substring(0, relative.length() - 5);
+            }
+
+            return relative.replace('/', '.').replace('\\', '.');
         });
     }
+
 
     private VirtualFile findModuleRoot(VirtualFile current) {
         VirtualFile dir = current.isDirectory() ? current : current.getParent();

@@ -48,6 +48,9 @@ import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.intellij.openapi.fileTypes.FileType;
+import com.intellij.openapi.fileTypes.FileTypeManager;
+import com.intellij.testFramework.LightVirtualFile;
 
 public class CommitAllAction extends AnAction {
 
@@ -282,10 +285,12 @@ public class CommitAllAction extends AnAction {
     private String getOwnerFolderName(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile srcDir = moduleRoot.findChild("src");
         if (srcDir == null) return null;
-        String path = VfsUtilCore.getRelativePath(file, srcDir);
-        if (path == null) return null;
-        int idx = path.indexOf('/');
-        return (idx > 0) ? path.substring(0, idx) : path;
+
+        String rel = getPathRelativeTo(srcDir, file);
+        if (rel == null) return null;
+
+        int idx = rel.indexOf('/');
+        return (idx > 0) ? rel.substring(0, idx) : rel;
     }
 
     private String findFolderUuid(List<CJavaFolderDto> folders, String name) {
@@ -381,20 +386,96 @@ public class CommitAllAction extends AnAction {
 
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
         VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null ? VfsUtilCore.getRelativePath(file, resDir) : null;
+        if (resDir == null) return null;
+        return getPathRelativeTo(resDir, file);
     }
+
+    @Nullable
+    private String getPathRelativeTo(@NotNull VirtualFile baseDir, @NotNull VirtualFile file) {
+        String base = baseDir.getPath().replace('\\', '/');
+        String path = file.getPath().replace('\\', '/');
+        if (!path.startsWith(base)) return null;
+
+        int start = base.length();
+        if (path.length() > start && path.charAt(start) == '/') start++;
+        if (start >= path.length()) return "";
+
+        return path.substring(start);
+    }
+
+    @Nullable
+    private VirtualFile createDeletedVirtualFile(@NotNull String absolutePath) {
+        String normalized = absolutePath.replace('\\', '/');
+        int idx = normalized.lastIndexOf('/');
+        String name = (idx >= 0) ? normalized.substring(idx + 1) : normalized;
+        String parentPath = (idx >= 0) ? normalized.substring(0, idx) : null;
+
+        if (parentPath == null) return null;
+
+        VirtualFile parent = LocalFileSystem.getInstance().findFileByPath(parentPath);
+        if (parent == null) return null;
+
+        FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(name);
+        return new DeletedPlaceholderFile(name, fileType, normalized, parent);
+    }
+
+    /**
+     * 🔴 红D：用于让 Action 能通过 getParent()/getPath() 正常推导 src 目录、folderName、className
+     */
+    private static class DeletedPlaceholderFile extends LightVirtualFile {
+        private final VirtualFile physicalParent;
+        private final String absolutePath;
+
+        DeletedPlaceholderFile(String name, FileType fileType, String absolutePath, VirtualFile physicalParent) {
+            super(name, fileType, "");
+            this.absolutePath = absolutePath;
+            this.physicalParent = physicalParent;
+            setWritable(false);
+        }
+
+        @Override
+        public VirtualFile getParent() {
+            return physicalParent;
+        }
+
+        @Override
+        public String getPath() {
+            return absolutePath;
+        }
+
+        @Override
+        public boolean isValid() {
+            return true;
+        }
+
+        @Override
+        public boolean exists() {
+            return false;
+        }
+    }
+
 
     private List<VirtualFile> collectChangedFiles(Project project, VirtualFile moduleRoot) {
         BapFileStatusService statusService = BapFileStatusService.getInstance(project);
         List<VirtualFile> result = new ArrayList<>();
         Map<String, BapFileStatus> allStatuses = statusService.getAllStatuses();
+
         for (Map.Entry<String, BapFileStatus> entry : allStatuses.entrySet()) {
             String path = entry.getKey();
             BapFileStatus status = entry.getValue();
             if (status == BapFileStatus.NORMAL) continue;
-            if (path.startsWith(moduleRoot.getPath())) {
-                VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-                if (file != null) result.add(file);
+            if (!path.startsWith(moduleRoot.getPath())) continue;
+
+            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+            if (file != null) {
+                result.add(file);
+                continue;
+            }
+
+            // 🔴 红D：文件本地不存在，需要用“带父级”的 LightVirtualFile 参与后续提交删除逻辑
+            if (status == BapFileStatus.DELETED_LOCALLY) {
+                VirtualFile deleted = createDeletedVirtualFile(path);
+                if (deleted != null) result.add(deleted);
             }
         }
         return result;
@@ -402,6 +483,8 @@ public class CommitAllAction extends AnAction {
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
+            // 1) Prefer PSI when file has real content and belongs to LocalFileSystem
+            // (LightVirtualFile / missing files often can't be resolved via PSI)
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -411,24 +494,26 @@ public class CommitAllAction extends AnAction {
                     return pkg.isEmpty() ? cls : pkg + "." + cls;
                 }
             }
+
+            // 2) Fallback: derive from absolute path under /src/<folderName>/
             VirtualFile parent = file.getParent();
             VirtualFile srcDir = null;
             while (parent != null) {
                 if ("src".equals(parent.getName())) { srcDir = parent; break; }
                 parent = parent.getParent();
             }
-            if (srcDir != null) {
-                String path = VfsUtilCore.getRelativePath(file, srcDir);
-                if (path != null) {
-                    int slash = path.indexOf('/');
-                    if (slash > 0) {
-                        String pkgPath = path.substring(slash + 1);
-                        if (pkgPath.endsWith(".java")) pkgPath = pkgPath.substring(0, pkgPath.length() - 5);
-                        return pkgPath.replace('/', '.');
-                    }
-                }
-            }
-            return null;
+            if (srcDir == null) return null;
+
+            String rel = getPathRelativeTo(srcDir, file);
+            if (rel == null) return null;
+
+            // rel: "<folderName>/com/foo/Bar.java" -> "com.foo.Bar"
+            int slash = rel.indexOf('/');
+            if (slash <= 0) return null;
+
+            String pkgPath = rel.substring(slash + 1);
+            if (pkgPath.endsWith(".java")) pkgPath = pkgPath.substring(0, pkgPath.length() - 5);
+            return pkgPath.replace('/', '.');
         });
     }
 

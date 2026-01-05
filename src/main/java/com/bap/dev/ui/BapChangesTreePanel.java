@@ -14,6 +14,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleUtil;
@@ -27,6 +28,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.SimpleTextAttributes;
@@ -47,6 +49,7 @@ import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.*;
 import java.util.List;
 
@@ -227,7 +230,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(moduleWrapper);
                 root.add(moduleNode);
 
-                Map<BapFileStatus, List<VirtualFile>> moduleChanges = new HashMap<>();
+                Map<BapFileStatus, List<VirtualFileWrapper>> moduleChanges = new HashMap<>(); // 🔴 List<VirtualFileWrapper>
 
                 if (!statuses.isEmpty()) {
                     for (Map.Entry<String, BapFileStatus> entry : statuses.entrySet()) {
@@ -236,18 +239,48 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                         if (status == BapFileStatus.NORMAL) continue;
 
                         if (path.startsWith(moduleWrapper.rootFile.getPath())) {
-                            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-                            if (file != null) {
-                                moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(file);
+
+                            // --- 🔴 核心修改开始 ---
+                            VirtualFileWrapper wrapper = null;
+
+                            if (status == BapFileStatus.DELETED_LOCALLY) {
+                                // 🔴 修改开始：创建“带父级”的虚拟文件
+                                File ioFile = new File(path);
+                                String fileName = ioFile.getName();
+                                var fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
+
+                                // 1. 寻找最近的存在的物理父目录
+                                // 因为文件删了，可能连父文件夹也删了，所以要向上查找直到找到存在的目录
+                                VirtualFile bestParent = findBestPhysicalParent(new File(ioFile.getParent()));
+
+                                // 如果实在找不到(极少见)，就用模块根目录兜底
+                                if (bestParent == null) bestParent = moduleWrapper.rootFile;
+
+                                // 2. 创建自定义虚拟文件
+                                VirtualFile fakeFile = new BapDeletedVirtualFile(fileName, fileType, path, bestParent);
+
+                                wrapper = new VirtualFileWrapper(fakeFile, path, status);
+                                // 🔴 修改结束
+                            } else {
+                                // 普通文件：查找本地文件
+                                VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+                                if (file != null) {
+                                    wrapper = new VirtualFileWrapper(file, path, status);
+                                }
                             }
+
+                            if (wrapper != null) {
+                                moduleChanges.computeIfAbsent(status, k -> new ArrayList<>()).add(wrapper);
+                            }
+                            // --- 🔴 核心修改结束 ---
                         }
                     }
                 }
 
                 if (!moduleChanges.isEmpty()) {
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, BapBundle.message("status.modified")); // "Modified"
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, BapBundle.message("status.added"));       // "Added"
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, BapBundle.message("status.deleted")); // "Deleted"
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, BapBundle.message("status.modified"));
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, BapBundle.message("status.added"));
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, BapBundle.message("status.deleted"));
                 }
             }
 
@@ -276,6 +309,16 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
             }
         });
+    }
+
+    // 递归向上查找存在的物理目录
+    private VirtualFile findBestPhysicalParent(File ioDir) {
+        if (ioDir == null) return null;
+        VirtualFile vf = LocalFileSystem.getInstance().findFileByIoFile(ioDir);
+        if (vf != null && vf.isValid() && vf.isDirectory()) {
+            return vf;
+        }
+        return findBestPhysicalParent(ioDir.getParentFile());
     }
 
     private DefaultMutableTreeNode findModuleNode(DefaultMutableTreeNode root, VirtualFile moduleRoot) {
@@ -323,17 +366,25 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
     private static class VirtualFileWrapper {
         VirtualFile file;
+        String absolutePath; // 🔴 新增：用于存储真实物理路径
         BapFileStatus status;
-        VirtualFileWrapper(VirtualFile file, BapFileStatus status) { this.file = file; this.status = status; }
+
+        VirtualFileWrapper(VirtualFile file, String absolutePath, BapFileStatus status) {
+            this.file = file;
+            this.absolutePath = absolutePath;
+            this.status = status;
+        }
+
         @Override public String toString() { return file.getName(); }
+        // 记得更新 equals/hashCode 使用 absolutePath
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             VirtualFileWrapper that = (VirtualFileWrapper) o;
-            return Objects.equals(file.getPath(), that.file.getPath());
+            return Objects.equals(absolutePath, that.absolutePath);
         }
-        @Override public int hashCode() { return Objects.hash(file.getPath()); }
+        @Override public int hashCode() { return Objects.hash(absolutePath); }
     }
 
     private List<ModuleWrapper> findAllBapModules() {
@@ -548,15 +599,16 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         }
     }
 
-    private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFile>> map, BapFileStatus status, String title) {
-        List<VirtualFile> files = map.get(status);
-        if (files != null && !files.isEmpty()) {
-            files.sort(Comparator.comparing(VirtualFile::getName));
-            String nodeTitle = BapBundle.message("ui.BapChangesTreePanel.category.format", title, files.size()); // title + " (" + files.size() + ")"
+    // --- 3. 对应修改 addStatusCategory (参数类型变了) ---
+    private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFileWrapper>> map, BapFileStatus status, String title) {
+        List<VirtualFileWrapper> wrappers = map.get(status); // 🔴 List<VirtualFileWrapper>
+        if (wrappers != null && !wrappers.isEmpty()) {
+            wrappers.sort(Comparator.comparing(w -> w.file.getName()));
+            String nodeTitle = BapBundle.message("ui.BapChangesTreePanel.category.format", title, wrappers.size());
             DefaultMutableTreeNode categoryNode = new DefaultMutableTreeNode(new CategoryWrapper(nodeTitle, status));
             parent.add(categoryNode);
-            for (VirtualFile file : files) {
-                categoryNode.add(new DefaultMutableTreeNode(new VirtualFileWrapper(file, status)));
+            for (VirtualFileWrapper wrapper : wrappers) {
+                categoryNode.add(new DefaultMutableTreeNode(wrapper));
             }
         }
     }
@@ -663,6 +715,51 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     else renderer.setIcon(AllIcons.FileTypes.Text);
                 }
             }
+        }
+    }
+
+    /**
+     * 🔴 核心修复：一个“有父级”的虚拟文件
+     * 专门用于欺骗 Action，让它们能通过 getParent() 找到 ModuleRoot
+     */
+    private static class BapDeletedVirtualFile extends LightVirtualFile {
+        private final VirtualFile physicalParent;
+        private final String absolutePath;
+
+        public BapDeletedVirtualFile(String name, com.intellij.openapi.fileTypes.FileType fileType, String absolutePath, VirtualFile physicalParent) {
+            super(name, fileType, "");
+            this.absolutePath = absolutePath;
+            this.physicalParent = physicalParent;
+            setWritable(false);
+        }
+
+        @Override
+        public VirtualFile getParent() {
+            return physicalParent; // 关键：返回真实的物理父目录
+        }
+
+        @Override
+        public String getPath() {
+            return absolutePath; // 返回真实的绝对路径
+        }
+
+        @Override
+        public boolean isValid() {
+            return true; // 欺骗 Action 说这个文件是有效的（否则某些检查会过不去）
+        }
+
+        // 确保 equals/hashCode 正常，防止集合操作异常
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            BapDeletedVirtualFile that = (BapDeletedVirtualFile) obj;
+            return Objects.equals(absolutePath, that.absolutePath);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(absolutePath);
         }
     }
 }
