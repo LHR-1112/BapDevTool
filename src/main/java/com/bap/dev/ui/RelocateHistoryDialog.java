@@ -87,7 +87,7 @@ public class RelocateHistoryDialog extends DialogWrapper {
                 .getPanel();
     }
 
-    // --- 🔴 编辑逻辑 ---
+
     private void editSelectedProfile() {
         BapSettingsState.RelocateProfile selected = historyList.getSelectedValue();
         if (selected == null) return;
