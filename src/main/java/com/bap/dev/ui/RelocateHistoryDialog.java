@@ -1,5 +1,6 @@
 package com.bap.dev.ui;
 
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.settings.BapSettingsState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -27,7 +28,7 @@ public class RelocateHistoryDialog extends DialogWrapper {
     public RelocateHistoryDialog(@Nullable Project project, List<BapSettingsState.RelocateProfile> history, String modulePath) {
         super(project);
         this.modulePath = modulePath;
-        setTitle("Select Relocation Target");
+        setTitle(BapBundle.message("ui.RelocateHistoryDialog.title"));
 
         this.listModel = new CollectionListModel<>(history);
         historyList = new JBList<>(listModel);
@@ -40,9 +41,11 @@ public class RelocateHistoryDialog extends DialogWrapper {
             @Override
             protected void customizeCellRenderer(@NotNull JList<? extends BapSettingsState.RelocateProfile> list, BapSettingsState.RelocateProfile value, int index, boolean selected, boolean hasFocus) {
                 append(value.projectName, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-                append("  on  ", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+                // [修改] 使用 Bundle (renderer.on)
+                append(BapBundle.message("ui.RelocateHistoryDialog.renderer.on"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
                 append(value.uri, SimpleTextAttributes.REGULAR_ATTRIBUTES);
-                append(" (" + value.user + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+                // [修改] 使用 Bundle (renderer.user)
+                append(BapBundle.message("ui.RelocateHistoryDialog.renderer.user", value.user), SimpleTextAttributes.GRAYED_ATTRIBUTES);
             }
         });
 
@@ -55,8 +58,8 @@ public class RelocateHistoryDialog extends DialogWrapper {
             }
         });
 
-        setOKButtonText("Relocate to Selected");
-        setCancelButtonText("Cancel");
+        setOKButtonText(BapBundle.message("ui.RelocateHistoryDialog.button.relocate_selected"));
+        setCancelButtonText(BapBundle.message("button.cancel"));
 
         init();
     }
@@ -77,8 +80,10 @@ public class RelocateHistoryDialog extends DialogWrapper {
                 .createPanel();
 
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("Recent Locations:", listPanel)
-                .addTooltip("Select a previous location to switch immediately, or edit/remove obsolete ones.")
+                // [修改] 使用 Bundle (label.recent_locations)
+                .addLabeledComponent(BapBundle.message("ui.RelocateHistoryDialog.label.recent_locations"), listPanel)
+                // [修改] 使用 Bundle (tooltip.select_history)
+                .addTooltip(BapBundle.message("ui.RelocateHistoryDialog.tooltip.select_history"))
                 .getPanel();
     }
 
@@ -109,7 +114,7 @@ public class RelocateHistoryDialog extends DialogWrapper {
 
         public EditProfileDialog(BapSettingsState.RelocateProfile profile) {
             super(RelocateHistoryDialog.this.getContentPane(), true);
-            setTitle("Edit Connection Profile");
+            setTitle(BapBundle.message("ui.RelocateHistoryDialog.edit.title"));
 
             uriField.setText(profile.uri);
             userField.setText(profile.user);
@@ -122,10 +127,11 @@ public class RelocateHistoryDialog extends DialogWrapper {
         @Override
         protected @Nullable JComponent createCenterPanel() {
             return FormBuilder.createFormBuilder()
-                    .addLabeledComponent("Server URI:", uriField)
-                    .addLabeledComponent("User:", userField)
-                    .addLabeledComponent("Password:", passwordField)      // 增加密码输入
-                    .addLabeledComponent("Project UUID:", projectUuidField) // 增加 UUID 输入
+                    // [修改] 使用 Bundle (label.server_uri, label.user, label.password, edit.label.uuid)
+                    .addLabeledComponent(BapBundle.message("label.server_uri"), uriField)
+                    .addLabeledComponent(BapBundle.message("label.user"), userField)
+                    .addLabeledComponent(BapBundle.message("label.password"), passwordField)
+                    .addLabeledComponent(BapBundle.message("ui.RelocateHistoryDialog.edit.label.uuid"), projectUuidField)
                     .getPanel();
         }
 
@@ -138,13 +144,13 @@ public class RelocateHistoryDialog extends DialogWrapper {
     @Override
     protected void createDefaultActions() {
         super.createDefaultActions();
-        myOKAction.putValue(Action.NAME, "Use Selected History");
+        myOKAction.putValue(Action.NAME, BapBundle.message("ui.RelocateHistoryDialog.button.use_history"));
     }
 
     @Override
     protected JComponent createSouthPanel() {
         JComponent southPanel = super.createSouthPanel();
-        JButton newConnBtn = new JButton("New Connection / Change...");
+        JButton newConnBtn = new JButton(BapBundle.message("ui.RelocateHistoryDialog.button.new_connection"));
         newConnBtn.addActionListener(e -> {
             isNewConnectionSelected = true;
             close(OK_EXIT_CODE);
