@@ -354,24 +354,49 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
     @Override
     public @Nullable Object getData(@NotNull String dataId) {
+        // 单选逻辑 (用于确定 Action 是否启用，或获取上下文 ModuleRoot)
         if (CommonDataKeys.VIRTUAL_FILE.is(dataId)) {
             TreePath path = tree.getSelectionPath();
             if (path == null) return null;
             return getFileFromPath(path);
         }
+
+        // 🔴 核心修改：多选/批量逻辑 (供给 CommitFileAction/UpdateFileAction)
         if (CommonDataKeys.VIRTUAL_FILE_ARRAY.is(dataId)) {
             TreePath[] paths = tree.getSelectionPaths();
             if (paths == null || paths.length == 0) return null;
-            List<VirtualFile> files = new ArrayList<>();
+
+            // 使用 Set 去重 (防止父子节点同时选中导致重复)
+            Set<VirtualFile> fileSet = new LinkedHashSet<>();
+
             for (TreePath path : paths) {
-                VirtualFile f = getFileFromPath(path);
-                if (f != null) files.add(f);
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                Object userObj = node.getUserObject();
+
+                if (userObj instanceof VirtualFileWrapper) {
+                    // 1. 直接选中了文件
+                    fileSet.add(((VirtualFileWrapper) userObj).file);
+                } else if (userObj instanceof CategoryWrapper) {
+                    // 2. 选中了分类节点 (Modified/Added/Deleted) -> 收集所有子文件
+                    int childCount = node.getChildCount();
+                    for (int i = 0; i < childCount; i++) {
+                        TreeNode child = node.getChildAt(i);
+                        if (child instanceof DefaultMutableTreeNode) {
+                            Object childObj = ((DefaultMutableTreeNode) child).getUserObject();
+                            if (childObj instanceof VirtualFileWrapper) {
+                                fileSet.add(((VirtualFileWrapper) childObj).file);
+                            }
+                        }
+                    }
+                }
             }
-            return files.isEmpty() ? null : files.toArray(new VirtualFile[0]);
+            return fileSet.isEmpty() ? null : fileSet.toArray(new VirtualFile[0]);
         }
         return super.getData(dataId);
     }
 
+    // 1. 修改：让 Category 节点也能返回所属的 Module 根目录
+    // 这样 UpdateAllAction / CommitAllAction 才能识别到项目并启用
     private VirtualFile getFileFromPath(TreePath path) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
         Object userObject = node.getUserObject();
@@ -379,6 +404,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             return ((VirtualFileWrapper) userObject).file;
         } else if (userObject instanceof ModuleWrapper) {
             return ((ModuleWrapper) userObject).rootFile;
+        } else if (userObject instanceof CategoryWrapper) {
+            // 🔴 新增：如果选中分组节点，向上查找并返回模块根目录
+            return getModuleRootFromNode(node);
         }
         return null;
     }
@@ -503,6 +531,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.RelocateProjectAction"));
             group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));
+        } else if (userObject instanceof CategoryWrapper) {
+            group.add(am.getAction("com.bap.dev.action.UpdateFileAction")); // 批量更新
+            group.add(am.getAction("com.bap.dev.action.CommitFileAction")); // 批量提交
         } else if (userObject instanceof VirtualFileWrapper) {
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
             group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
@@ -621,9 +652,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     java.awt.Color addColor = settings.getAddedColorObj();
                     java.awt.Color delColor = settings.getDeletedColorObj();
                     switch (wrapper.status) {
-                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = BapBundle.message("status.symbol.modified"); break; // " [M]"
-                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = BapBundle.message("status.symbol.added"); break;       // " [A]"
-                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = BapBundle.message("status.symbol.deleted"); break; // " [D]"
+                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = " "+BapBundle.message("status.symbol.modified"); break; // " [M]"
+                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = " "+BapBundle.message("status.symbol.added"); break;       // " [A]"
+                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = " "+BapBundle.message("status.symbol.deleted"); break; // " [D]"
                     }
                     renderer.append(wrapper.file.getName(), attr);
                     renderer.append(suffix, SimpleTextAttributes.GRAYED_ATTRIBUTES);

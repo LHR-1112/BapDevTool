@@ -266,9 +266,9 @@ public class UpdateAllAction extends AnAction {
         for (VirtualFile f : files) {
             BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(f);
             String symbol = "[?]";
-            if (status == BapFileStatus.MODIFIED) symbol = "[M 覆盖]";
-            if (status == BapFileStatus.ADDED)    symbol = "[A 删除]";
-            if (status == BapFileStatus.DELETED_LOCALLY) symbol = "[D 还原]";
+            if (status == BapFileStatus.MODIFIED) symbol = BapBundle.message("action.StartDebugAction.symbol.modify");
+            if (status == BapFileStatus.ADDED)    symbol = BapBundle.message("action.StartDebugAction.symbol.add");
+            if (status == BapFileStatus.DELETED_LOCALLY) symbol = BapBundle.message("action.StartDebugAction.symbol.delete");
             sb.append(symbol).append(" ").append(f.getName()).append("\n");
             if (++count > 15) {
                 sb.append(BapBundle.message("action.UpdateAllAction.dialog.confirm_more", files.size())); // "... 等 " + files.size() + " 个文件"
