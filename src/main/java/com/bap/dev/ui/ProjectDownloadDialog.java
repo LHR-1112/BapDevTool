@@ -1,6 +1,7 @@
 package com.bap.dev.ui;
 
 import bap.java.CJavaProjectDto;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -18,14 +19,14 @@ public class ProjectDownloadDialog extends DialogWrapper {
 
     public ProjectDownloadDialog(@Nullable Project project, List<CJavaProjectDto> projects) {
         super(project);
-        setTitle("Select Project to Download");
+        setTitle(BapBundle.message("ui.ProjectDownloadDialog.title")); // "Select Project to Download"
 
         // 配置渲染器：显示 工程名 (UUID)
         projectCombo.setRenderer(new SimpleListCellRenderer<>() {
             @Override
             public void customize(@NotNull JList<? extends CJavaProjectDto> list, CJavaProjectDto value, int index, boolean selected, boolean hasFocus) {
                 if (value != null) {
-                    setText(value.getName() + " (" + value.getUuid() + ")");
+                    setText(BapBundle.message("ui.ProjectDownloadDialog.item_format", value.getName(), value.getUuid())); // value.getName() + " (" + value.getUuid() + ")"
                 }
             }
         });
@@ -48,7 +49,7 @@ public class ProjectDownloadDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("Select project:", projectCombo)
+                .addLabeledComponent(BapBundle.message("ui.ProjectDownloadDialog.label.select_project"), projectCombo) // "Select project:"
                 .getPanel();
     }
 
