@@ -38,14 +38,12 @@
 
     <actions>
         <action id="com.bap.dev.action.ProjectDownloadAction"
-                class="com.bap.dev.action.ProjectDownloadAction"
-                icon="AllIcons.Actions.Download">
+                class="com.bap.dev.action.ProjectDownloadAction">
             <add-to-group group-id="WelcomeScreen.QuickStart" anchor="first"/>
         </action>
 
         <group id="BapDevelopmentGroup"
-               popup="true"
-               icon="AllIcons.General.GearPlain">
+               popup="true">
 
             <action id="com.bap.dev.action.HelloWorldAction"
                     class="com.bap.dev.action.HelloWorldAction"/>
@@ -55,8 +53,7 @@
             <separator/>
 
             <action id="com.bap.dev.action.OpenBapSettingsAction"
-                    class="com.bap.dev.action.OpenBapSettingsAction"
-                    icon="AllIcons.General.Settings"/>
+                    class="com.bap.dev.action.OpenBapSettingsAction"/>
 
             <add-to-group group-id="MainMenu" anchor="after" relative-to-action="HelpMenu"/>
         </group>
