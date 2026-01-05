@@ -88,10 +88,10 @@ public class HistoryListDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         String[] columnNames = {
-                BapBundle.message("ui.HistoryListDialog.col.ver"),      // "Ver"
-                BapBundle.message("ui.HistoryListDialog.col.time"),     // "Time"
-                BapBundle.message("ui.HistoryListDialog.col.user"),     // "User"
-                BapBundle.message("ui.HistoryListDialog.col.comments")  // "Comments"
+                BapBundle.message("column.ver"),      // "Ver"
+                BapBundle.message("column.time"),     // "Time"
+                BapBundle.message("column.user"),     // "User"
+                BapBundle.message("column.comments")  // "Comments"
         };
         Object[][] data = new Object[historyList.size()][4];
         for (int i = 0; i < historyList.size(); i++) {
@@ -158,18 +158,18 @@ public class HistoryListDialog extends DialogWrapper {
     private void showContextMenu(VersionNode node, MouseEvent e) {
         DefaultActionGroup group = new DefaultActionGroup();
 
-        group.add(new AnAction(BapBundle.message("ui.HistoryListDialog.action.compare_previous"), "", AllIcons.Actions.Diff) { // "Compare with Previous Version"
+        group.add(new AnAction(BapBundle.message("action.compare_previous"), "", AllIcons.Actions.Diff) { // "Compare with Previous Version"
             @Override public void actionPerformed(@NotNull AnActionEvent e) { compareWithPrevious(node); }
         });
-        group.add(new AnAction(BapBundle.message("ui.HistoryListDialog.action.compare_local"), "", AllIcons.Actions.Diff) { // "Compare with Local"
+        group.add(new AnAction(BapBundle.message("action.compare_local"), "", AllIcons.Actions.Diff) { // "Compare with Local"
             @Override public void actionPerformed(@NotNull AnActionEvent e) { compareWithLocal(node); }
         });
 
         if (isResource()) {
             group.addSeparator();
             group.add(new AnAction(
-                    BapBundle.message("ui.HistoryListDialog.action.save_local"), // "Save to Local"
-                    BapBundle.message("ui.HistoryListDialog.desc.save_local"),   // "Download and save to local disk"
+                    BapBundle.message("action.save_local"), // "Save to Local"
+                    BapBundle.message("desc.save_local"),   // "Download and save to local disk"
                     AllIcons.Actions.Download) {
                 @Override public void actionPerformed(@NotNull AnActionEvent e) { saveResourceToLocal(node); }
             });
@@ -207,7 +207,7 @@ public class HistoryListDialog extends DialogWrapper {
         });
 
         // 2. Compare
-        actions.add(new AbstractAction(BapBundle.message("ui.HistoryListDialog.action.compare_ellipsis")) { // "Compare..."
+        actions.add(new AbstractAction(BapBundle.message("action.compare_ellipsis")) { // "Compare..."
             @Override
             public void actionPerformed(ActionEvent e) {
                 int row = table.getSelectedRow();
@@ -221,10 +221,10 @@ public class HistoryListDialog extends DialogWrapper {
                 VersionNode selected = historyList.get(row);
 
                 DefaultActionGroup group = new DefaultActionGroup();
-                group.add(new AnAction(BapBundle.message("ui.HistoryListDialog.action.compare_previous")) { // "Compare with Previous Version"
+                group.add(new AnAction(BapBundle.message("action.compare_previous")) { // "Compare with Previous Version"
                     @Override public void actionPerformed(@NotNull AnActionEvent e) { compareWithPrevious(selected); }
                 });
-                group.add(new AnAction(BapBundle.message("ui.HistoryListDialog.action.compare_local")) { // "Compare with Local"
+                group.add(new AnAction(BapBundle.message("action.compare_local")) { // "Compare with Local"
                     @Override public void actionPerformed(@NotNull AnActionEvent e) { compareWithLocal(selected); }
                 });
                 ListPopup popup = JBPopupFactory.getInstance().createActionGroupPopup(
@@ -238,7 +238,7 @@ public class HistoryListDialog extends DialogWrapper {
 
         // 3. 🔴 Save to Local (仅资源文件显示)
         if (isResource()) {
-            actions.add(new AbstractAction(BapBundle.message("ui.HistoryListDialog.action.save_local")) { // "Save to Local"
+            actions.add(new AbstractAction(BapBundle.message("action.save_local")) { // "Save to Local"
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     int row = table.getSelectedRow();
@@ -262,11 +262,11 @@ public class HistoryListDialog extends DialogWrapper {
 
     private void saveResourceToLocal(VersionNode node) {
         FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
-        descriptor.setTitle(BapBundle.message("ui.HistoryListDialog.chooser.dest_folder")); // "Select Destination Folder"
+        descriptor.setTitle(BapBundle.message("chooser.dest_folder")); // "Select Destination Folder"
         VirtualFile targetDir = FileChooser.chooseFile(descriptor, project, null);
         if (targetDir == null) return;
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("ui.HistoryListDialog.progress.download_resource"), true) { // "Downloading Resource..."
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.download_resource"), true) { // "Downloading Resource..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
@@ -285,13 +285,13 @@ public class HistoryListDialog extends DialogWrapper {
                         ApplicationManager.getApplication().invokeLater(() ->
                                 // 修改16: Info Message
                                 Messages.showInfoMessage(
-                                        BapBundle.message("ui.HistoryListDialog.msg.saved_to", destFile.getAbsolutePath()), // "Saved to: ..."
+                                        BapBundle.message("msg.saved_to", destFile.getAbsolutePath()), // "Saved to: ..."
                                         BapBundle.message("title.success"))); // "Success" (Common)
                     } else {
                         ApplicationManager.getApplication().invokeLater(() ->
                                 // 修改17: Error Message
                                 Messages.showErrorDialog(
-                                        BapBundle.message("ui.HistoryListDialog.error.empty_content"), // "File content is empty or not found."
+                                        BapBundle.message("error.empty_content"), // "File content is empty or not found."
                                         BapBundle.message("title.error"))); // "Error" (Common)
                     }
                 } catch (Exception e) {
@@ -299,7 +299,7 @@ public class HistoryListDialog extends DialogWrapper {
                     ApplicationManager.getApplication().invokeLater(() ->
                             // 修改18: Error Message
                             Messages.showErrorDialog(
-                                    BapBundle.message("ui.HistoryListDialog.error.download_fail", e.getMessage()), // "Download failed: " + e.getMessage()
+                                    BapBundle.message("error.download_fail", e.getMessage()), // "Download failed: " + e.getMessage()
                                     BapBundle.message("title.error"))); // "Error" (Common)
                 } finally {
                     client.shutdown();
@@ -309,7 +309,7 @@ public class HistoryListDialog extends DialogWrapper {
     }
 
     private void showFileContent(VersionNode node) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("ui.HistoryListDialog.progress.fetching_content"), true) { // "Fetching Content..."
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.fetching_content"), true) { // "Fetching Content..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
@@ -329,7 +329,7 @@ public class HistoryListDialog extends DialogWrapper {
                         if (finalContent == null || finalContent.isEmpty()) {
                             // 修改20: Warning
                             Messages.showWarningDialog(
-                                    BapBundle.message("ui.HistoryListDialog.warn.content_empty"), // "内容为空或无法显示。"
+                                    BapBundle.message("warn.content_empty"), // "内容为空或无法显示。"
                                     BapBundle.message("title.tip"));                              // "提示" (Common)
                             return;
                         }
@@ -356,13 +356,13 @@ public class HistoryListDialog extends DialogWrapper {
 
         if (!prevOpt.isPresent()) {
             Messages.showInfoMessage(
-                    BapBundle.message("ui.HistoryListDialog.info.no_previous"), // "没有更早的历史版本。"
+                    BapBundle.message("info.no_previous"), // "没有更早的历史版本。"
                     BapBundle.message("title.tip"));                            // "提示" (Common)
             return;
         }
         VersionNode prevNode = prevOpt.get();
 
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("ui.HistoryListDialog.progress.fetching_history"), true) { // "Fetching History..."
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.fetching_history"), true) { // "Fetching History..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
@@ -388,8 +388,8 @@ public class HistoryListDialog extends DialogWrapper {
                     ApplicationManager.getApplication().invokeLater(() ->
                             // 修改23: Diff Titles
                             showDiff(c1, c2,
-                                    BapBundle.message("ui.HistoryListDialog.diff.previous", prevNode.versionNo), // "Previous (v...)"
-                                    BapBundle.message("ui.HistoryListDialog.diff.current", currentNode.versionNo), // "Current (v...)"
+                                    BapBundle.message("diff.previous", prevNode.versionNo), // "Previous (v...)"
+                                    BapBundle.message("diff.current", currentNode.versionNo), // "Current (v...)"
                                     localFile.getName())
                     );
                 } catch (Exception e) {
@@ -402,7 +402,7 @@ public class HistoryListDialog extends DialogWrapper {
     }
 
     private void compareWithLocal(VersionNode node) {
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("ui.HistoryListDialog.progress.fetching_history"), true) { // "Fetching History..."
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.fetching_history"), true) { // "Fetching History..."
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
@@ -421,7 +421,7 @@ public class HistoryListDialog extends DialogWrapper {
                     final String finalContent = remoteContent;
                     ApplicationManager.getApplication().invokeLater(() ->
                             // 修改25: Diff Title
-                            showDiffWithLocal(finalContent, BapBundle.message("ui.HistoryListDialog.diff.remote", node.versionNo)) // "Remote (v...)"
+                            showDiffWithLocal(finalContent, BapBundle.message("diff.remote", node.versionNo)) // "Remote (v...)"
                     );
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -483,26 +483,26 @@ public class HistoryListDialog extends DialogWrapper {
     private void showDiff(String contentA, String contentB, String titleA, String titleB, String fileName) {
         DiffContentFactory factory = DiffContentFactory.getInstance();
         SimpleDiffRequest request = new SimpleDiffRequest(
-                BapBundle.message("ui.HistoryListDialog.diff.title", fileName), // "Compare " + fileName
+                BapBundle.message("diff.title", fileName), // "Compare " + fileName
                 factory.create(project, contentA, isResource() ? XmlFileType.INSTANCE : JavaFileType.INSTANCE),
                 factory.create(project, contentB, isResource() ? XmlFileType.INSTANCE : JavaFileType.INSTANCE),
                 titleA, titleB);
         SimpleDiffRequestChain chain = new SimpleDiffRequestChain(request);
-        ChainDiffVirtualFile virtualFile = new ChainDiffVirtualFile(chain, BapBundle.message("ui.HistoryListDialog.diff.file_title", fileName)); // "Diff: " + fileName
+        ChainDiffVirtualFile virtualFile = new ChainDiffVirtualFile(chain, BapBundle.message("diff.file_title", fileName)); // "Diff: " + fileName
         FileEditorManager.getInstance(project).openFile(virtualFile, true);
     }
 
     private void showDiffWithLocal(String remoteContent, String remoteTitle) {
         DiffContentFactory factory = DiffContentFactory.getInstance();
         SimpleDiffRequest request = new SimpleDiffRequest(
-                BapBundle.message("ui.HistoryListDialog.diff.title", localFile.getName()), // "Compare " + localFile.getName()
+                BapBundle.message("diff.title", localFile.getName()), // "Compare " + localFile.getName()
                 factory.create(project, remoteContent, isResource() ? XmlFileType.INSTANCE : JavaFileType.INSTANCE),
                 factory.create(project, localFile),
                 remoteTitle,
-                BapBundle.message("ui.HistoryListDialog.diff.local")); // "Local (Current)"
+                BapBundle.message("diff.local")); // "Local (Current)"
         SimpleDiffRequestChain chain = new SimpleDiffRequestChain(request);
         // 修改33: Diff File Title
-        ChainDiffVirtualFile virtualFile = new ChainDiffVirtualFile(chain, BapBundle.message("ui.HistoryListDialog.diff.file_title", remoteTitle)); // "Diff: " + remoteTitle
+        ChainDiffVirtualFile virtualFile = new ChainDiffVirtualFile(chain, BapBundle.message("diff.file_title", remoteTitle)); // "Diff: " + remoteTitle
         FileEditorManager.getInstance(project).openFile(virtualFile, true);
     }
 }
