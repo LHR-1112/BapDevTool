@@ -15,6 +15,7 @@ import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager; // 引入
 import com.intellij.openapi.project.Project;
@@ -179,6 +180,14 @@ public class ProjectRefresher {
         }
     }
 
+    // --- 🔴 辅助：判断是否为忽略文件 ---
+    private boolean isIgnored(VirtualFile file) {
+        // 1. 显式过滤 MacOS 垃圾文件
+        if (".DS_Store".equals(file.getName())) return true;
+        // 2. 使用 IDEA 全局配置的忽略列表 (包含 .git, .svn, .DS_Store 等)
+        return FileTypeManager.getInstance().isFileIgnored(file);
+    }
+
     // 🔴 修改：增加 silentMode 判断
     private void showError(String title, String content, boolean silentMode) {
         if (silentMode) {
@@ -207,6 +216,9 @@ public class ProjectRefresher {
             VfsUtilCore.visitChildrenRecursively(subDir, new VirtualFileVisitor<Void>() {
                 @Override
                 public boolean visitFile(@NotNull VirtualFile file) {
+                    // 🔴 过滤逻辑：忽略 .DS_Store 等文件
+                    if (isIgnored(file)) return false;
+
                     if (!file.isDirectory()) {
                         String key = calculateKey(subDir, file);
                         FileDto cloudDto = cloudFileMap.get(key);
@@ -253,6 +265,9 @@ public class ProjectRefresher {
             VfsUtilCore.visitChildrenRecursively(subDir, new VirtualFileVisitor<Void>() {
                 @Override
                 public boolean visitFile(@NotNull VirtualFile file) {
+                    // 🔴 过滤逻辑：忽略 .DS_Store 等文件
+                    if (isIgnored(file)) return false;
+
                     if (!file.isDirectory() && "java".equalsIgnoreCase(file.getExtension())) {
                         String key = calculateKey(subDir, file);
                         JavaDto cloudDto = cloudCodeMap.get(key);
@@ -345,6 +360,8 @@ public class ProjectRefresher {
                 for (String relativePath : missingPaths) {
                     try {
                         if (relativePath == null) continue;
+                        // 🔴 过滤：如果云端传来的列表里有 .DS_Store (虽然少见但可能)，也忽略
+                        if (relativePath.contains(".DS_Store")) continue;
                         File ioFile = new File(dirRoot.getPath(), relativePath);
                         if (!ioFile.exists()) {
                             ioFile.getParentFile().mkdirs();
