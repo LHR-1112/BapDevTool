@@ -1,6 +1,7 @@
 package com.bap.dev.settings;
 
 import com.bap.dev.activity.CheckUpdateActivity; // 引入检查更新类
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColorPanel;
@@ -37,21 +38,21 @@ public class BapSettingsConfigurable implements Configurable {
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
-        return "Bap Settings";
+        return BapBundle.message("configurable.BapSettingsConfigurable.display_name"); // "Bap Settings"
     }
 
     @Override
     public @Nullable JComponent createComponent() {
-        compileOnPublishCheckbox = new JBCheckBox("发布时自动编译");
-        autoRefreshCheckbox = new JBCheckBox("自动刷新文件状态");
-        autoRefreshCheckbox.setToolTipText("开启后，文件修改保存时会自动触发云端比对（可能会有网络延迟）");
+        compileOnPublishCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.compile_on_publish")); // "发布时自动编译"
+        autoRefreshCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.auto_refresh")); // "自动刷新文件状态"
+        autoRefreshCheckbox.setToolTipText(BapBundle.message("configurable.BapSettingsConfigurable.tooltip.auto_refresh")); // "开启后..."
 
         // --- 🔴 初始化新增组件 ---
-        checkUpdateCheckbox = new JBCheckBox("启动时自动检查更新");
+        checkUpdateCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.check_update")); // "启动时自动检查更新"
 
-        showProjectNodeActionsCheckBox = new JBCheckBox("显示工程节点右侧操作按钮");
+        showProjectNodeActionsCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_project_node_actions")); // "显示工程节点右侧操作按钮"
 
-        JButton checkUpdateBtn = new JButton("检查更新");
+        JButton checkUpdateBtn = new JButton(BapBundle.message("title.check_update")); // "检查更新"
         checkUpdateBtn.addActionListener(e -> {
             // 传入 null project (因为这是 Application 级别的设置页)，isManual = true
             CheckUpdateActivity.runUpdateCheck(null, true);
@@ -70,7 +71,7 @@ public class BapSettingsConfigurable implements Configurable {
 
         JPanel uriListPanel = ToolbarDecorator.createDecorator(uriList)
                 .setAddAction(button -> {
-                    String input = JOptionPane.showInputDialog("Enter Server URI:");
+                    String input = JOptionPane.showInputDialog(BapBundle.message("configurable.BapSettingsConfigurable.dialog.enter_uri")); // "Enter Server URI:"
                     if (input != null && !input.trim().isEmpty()) {
                         uriListModel.add(input.trim());
                     }
@@ -83,19 +84,19 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(updatePanel) // 添加更新配置行
                 .addComponent(showProjectNodeActionsCheckBox) // 添加更新配置行
                 .addSeparator()
-                .addLabeledComponent("Modified color:", createColorRow(modifiedColorPanel, JBColor.YELLOW))
-                .addLabeledComponent("Added color:", createColorRow(addedColorPanel, JBColor.BLUE))
-                .addLabeledComponent("Deleted color:", createColorRow(deletedColorPanel, JBColor.RED))
+                .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.modified_color"), createColorRow(modifiedColorPanel, JBColor.YELLOW)) // "Modified color:"
+                .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.added_color"), createColorRow(addedColorPanel, JBColor.BLUE))       // "Added color:"
+                .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.deleted_color"), createColorRow(deletedColorPanel, JBColor.RED))    // "Deleted color:"
                 .addSeparator()
-                .addLabeledComponentFillVertically("Server URI History:", uriListPanel)
+                .addLabeledComponentFillVertically(BapBundle.message("configurable.BapSettingsConfigurable.label.uri_history"), uriListPanel) // "Server URI History:"
                 .getPanel();
     }
 
     private JPanel createColorRow(ColorPanel panel, Color defaultColor) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         row.add(panel);
-        JButton resetBtn = new JButton("还原");
-        resetBtn.setToolTipText("Restore default color");
+        JButton resetBtn = new JButton(BapBundle.message("button.reset")); // "还原"
+        resetBtn.setToolTipText(BapBundle.message("configurable.BapSettingsConfigurable.tooltip.restore_color")); // "Restore default color"
         resetBtn.addActionListener(e -> panel.setSelectedColor(defaultColor));
         row.add(resetBtn);
         return row;
