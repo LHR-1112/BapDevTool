@@ -2,6 +2,7 @@ package com.bap.dev.listener;
 
 import bap.java.CJavaConst;
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -26,7 +27,7 @@ public class BapModuleListener implements ModuleListener {
             if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
 
                 // 启动后台任务刷新该模块
-                ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing New Module...", true) {
+                ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.refresh_module"), true) {
                     @Override
                     public void run(@NotNull ProgressIndicator indicator) {
                         new ProjectRefresher(project).refreshModule(root);
