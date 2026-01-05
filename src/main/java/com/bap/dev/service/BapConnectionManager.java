@@ -1,6 +1,7 @@
 package com.bap.dev.service;
 
 import com.bap.dev.BapRpcClient;
+import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
@@ -68,7 +69,7 @@ public final class BapConnectionManager implements Disposable {
             } catch (Exception e) {
                 // 连接失败，确保清理
                 closeConnection();
-                throw new RuntimeException("无法建立 BAP 长连接: " + e.getMessage(), e);
+                throw new RuntimeException(BapBundle.message("error.connection_establish", e.getMessage()), e); // "无法建立 BAP 长连接: " + e.getMessage()
             }
         }
 
