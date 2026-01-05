@@ -2,6 +2,7 @@ package com.bap.dev.ui;
 
 import bap.java.CJavaConst;
 import com.bap.dev.handler.ProjectRefresher;
+import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
@@ -244,9 +245,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
 
                 if (!moduleChanges.isEmpty()) {
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, "Modified");
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, "Added");
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, "Deleted");
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, BapBundle.message("status.modified")); // "Modified"
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, BapBundle.message("status.added"));       // "Added"
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, BapBundle.message("status.deleted")); // "Deleted"
                 }
             }
 
@@ -383,7 +384,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     }
 
     private class ToolbarRefreshAction extends AnAction {
-        public ToolbarRefreshAction() { super("Refresh", "Refresh selected module", AllIcons.Actions.Refresh); }
+        public ToolbarRefreshAction() { super(BapBundle.message("action.refresh"), BapBundle.message("ui.BapChangesTreePanel.action.refresh.desc"), AllIcons.Actions.Refresh); }
         @Override public void actionPerformed(@NotNull AnActionEvent e) {
             TreePath selectionPath = tree.getSelectionPath();
             List<VirtualFile> modulesToRefresh = new ArrayList<>();
@@ -398,11 +399,11 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             }
             if (modulesToRefresh.isEmpty()) { rebuildTree(); return; }
 
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Refreshing Bap Modules...", true) {
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("ui.BapChangesTreePanel.progress.title"), true) {
                 @Override public void run(@NotNull ProgressIndicator indicator) {
                     ProjectRefresher refresher = new ProjectRefresher(project);
                     for (VirtualFile root : modulesToRefresh) {
-                        indicator.setText("Refreshing " + root.getName() + "...");
+                        indicator.setText(BapBundle.message("progress.refreshing_target", root.getName())); // "Refreshing " + root.getName() + "..."
                         refresher.refreshModule(root, false);
                     }
                 }
@@ -411,17 +412,23 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     }
 
     private class ExpandAllAction extends AnAction {
-        public ExpandAllAction() { super("Expand All", "Expand all nodes", AllIcons.Actions.Expandall); }
+        public ExpandAllAction() {
+            super(BapBundle.message("action.expand_all"), BapBundle.message("ui.BapChangesTreePanel.action.expand.desc"), AllIcons.Actions.Expandall);
+        }
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.expandAll(tree); }
     }
 
     private class CollapseAllAction extends AnAction {
-        public CollapseAllAction() { super("Collapse All", "Collapse all nodes", AllIcons.Actions.Collapseall); }
+        public CollapseAllAction() {
+            super(BapBundle.message("action.collapse_all"), BapBundle.message("ui.BapChangesTreePanel.action.collapse.desc"), AllIcons.Actions.Collapseall);
+        }
         @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.collapseAll(tree, 0); }
     }
 
     private class LocateCurrentFileAction extends AnAction {
-        public LocateCurrentFileAction() { super("Select Opened File", "Locate current opened file", AllIcons.General.Locate); }
+        public LocateCurrentFileAction() {
+            super(BapBundle.message("ui.BapChangesTreePanel.action.locate.text"), BapBundle.message("ui.BapChangesTreePanel.action.locate.desc"), AllIcons.General.Locate);
+        }
         @Override public void actionPerformed(@NotNull AnActionEvent e) {
             VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
             if (selectedFiles.length == 0) return;
@@ -514,7 +521,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         List<VirtualFile> files = map.get(status);
         if (files != null && !files.isEmpty()) {
             files.sort(Comparator.comparing(VirtualFile::getName));
-            DefaultMutableTreeNode categoryNode = new DefaultMutableTreeNode(new CategoryWrapper(title + " (" + files.size() + ")", status));
+            String nodeTitle = BapBundle.message("ui.BapChangesTreePanel.category.format", title, files.size()); // title + " (" + files.size() + ")"
+            DefaultMutableTreeNode categoryNode = new DefaultMutableTreeNode(new CategoryWrapper(nodeTitle, status));
             parent.add(categoryNode);
             for (VirtualFile file : files) {
                 categoryNode.add(new DefaultMutableTreeNode(new VirtualFileWrapper(file, status)));
@@ -613,9 +621,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     java.awt.Color addColor = settings.getAddedColorObj();
                     java.awt.Color delColor = settings.getDeletedColorObj();
                     switch (wrapper.status) {
-                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = " [M]"; break;
-                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = " [A]"; break;
-                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = " [D]"; break;
+                        case MODIFIED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, modColor); suffix = BapBundle.message("status.symbol.modified"); break; // " [M]"
+                        case ADDED: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addColor); suffix = BapBundle.message("status.symbol.added"); break;       // " [A]"
+                        case DELETED_LOCALLY: attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, delColor); suffix = BapBundle.message("status.symbol.deleted"); break; // " [D]"
                     }
                     renderer.append(wrapper.file.getName(), attr);
                     renderer.append(suffix, SimpleTextAttributes.GRAYED_ATTRIBUTES);
