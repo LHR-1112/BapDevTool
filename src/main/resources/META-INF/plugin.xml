@@ -12,7 +12,7 @@
         <applicationConfigurable parentId="tools"
                                  instance="com.bap.dev.settings.BapSettingsConfigurable"
                                  id="com.bap.dev.settings.BapSettingsConfigurable"
-                                 displayName="Bap Settings"/>
+                                 key="configurable.BapSettingsConfigurable.display_name"/>
         <projectViewNodeDecorator implementation="com.bap.dev.ui.BapProjectDecorator"/>
         <notificationGroup id="Cloud Project Download"
                            displayType="BALLOON"
@@ -39,21 +39,16 @@
     <actions>
         <action id="com.bap.dev.action.ProjectDownloadAction"
                 class="com.bap.dev.action.ProjectDownloadAction"
-                text="Download Project"
-                description="Download from cloud warehouse"
-                icon="AllIcons.Actions.Download"> <add-to-group group-id="WelcomeScreen.QuickStart" anchor="first"/>
+                icon="AllIcons.Actions.Download">
+            <add-to-group group-id="WelcomeScreen.QuickStart" anchor="first"/>
         </action>
 
         <group id="BapDevelopmentGroup"
-               text="Bap"
-               description="Bap development tools"
                popup="true"
                icon="AllIcons.General.GearPlain">
 
             <action id="com.bap.dev.action.HelloWorldAction"
-                    class="com.bap.dev.action.HelloWorldAction"
-                    text="Hello World"
-                    description="Hello world"/>
+                    class="com.bap.dev.action.HelloWorldAction"/>
 
             <reference ref="com.bap.dev.action.ProjectDownloadAction"/>
 
@@ -61,83 +56,55 @@
 
             <action id="com.bap.dev.action.OpenBapSettingsAction"
                     class="com.bap.dev.action.OpenBapSettingsAction"
-                    text="Settings"
-                    description="Open Bap settings"
                     icon="AllIcons.General.Settings"/>
 
             <add-to-group group-id="MainMenu" anchor="after" relative-to-action="HelpMenu"/>
         </group>
 
-        <group id="BapContextGroup" text="BapTools" popup="true" icon="AllIcons.General.GearPlain">
+        <group id="BapContextGroup" popup="true" icon="AllIcons.General.GearPlain">
             <action id="com.bap.dev.action.RefreshProjectAction"
                     class="com.bap.dev.action.RefreshProjectAction"
-                    text="Refresh"
-                    description="Refresh this module from cloud"
                     icon="AllIcons.Actions.Refresh"/>
             <separator/>
             <action id="com.bap.dev.action.UpdateLibsAction"
                     class="com.bap.dev.action.UpdateLibsAction"
-                    text="Update Libs"
-                    description="Download and update dependency libraries"
                     icon="AllIcons.Nodes.PpLib"/>
             <action id="com.bap.dev.action.UpdateAllAction"
                     class="com.bap.dev.action.UpdateAllAction"
-                    text="Update All"
-                    description="Revert all local changes to cloud version"
                     icon="AllIcons.Actions.CheckOut"/>
             <action id="com.bap.dev.action.UpdateFileAction"
                     class="com.bap.dev.action.UpdateFileAction"
-                    text="Update"
-                    description="Overwrite local file with cloud version"
                     icon="AllIcons.Actions.Download"/>
             <separator/>
             <action id="com.bap.dev.action.CompareJavaCodeAction"
                     class="com.bap.dev.action.CompareJavaCodeAction"
-                    text="Compared"
-                    description="Compare local code with cloud version"
                     icon="AllIcons.Actions.Diff"/>
             <action id="com.bap.dev.action.ShowHistoryAction"
                     class="com.bap.dev.action.ShowHistoryAction"
-                    text="Show History"
-                    description="View cloud version history"
                     icon="AllIcons.Vcs.History"/>
             <action id="com.bap.dev.action.ShowProjectHistoryAction"
                     class="com.bap.dev.action.ShowProjectHistoryAction"
-                    text="Show Project History"
-                    description="View history of all files in project"
                     icon="AllIcons.Vcs.History"/>
             <separator/>
             <action id="com.bap.dev.action.CommitAllAction"
                     class="com.bap.dev.action.CommitAllAction"
-                    text="Commit All"
-                    description="Commit all changes in module"
                     icon="AllIcons.Actions.Commit"/>
             <action id="com.bap.dev.action.CommitFileAction"
                     class="com.bap.dev.action.CommitFileAction"
-                    text="Commit"
-                    description="Upload local code to cloud"
                     icon="AllIcons.Actions.Upload"/>
             <action id="com.bap.dev.action.PublishProjectAction"
                     class="com.bap.dev.action.PublishProjectAction"
-                    text="Publish"
-                    description="Rebuild and export project"
                     icon="AllIcons.Actions.Execute"/>
             <separator/>
             <action id="com.bap.dev.action.RelocateProjectAction"
                     class="com.bap.dev.action.RelocateProjectAction"
-                    text="Relocate Project"
-                    description="Change remote project mapping"
                     icon="AllIcons.Nodes.Project"/>
             <separator/>
             <action id="com.bap.dev.action.OpenAdminToolAction"
                     class="com.bap.dev.action.OpenAdminToolAction"
-                    text="Open Admin Tool"
-                    description="Launch bap admin tool"
                     icon="AllIcons.General.Settings"/>
             <action id="com.bap.dev.action.StartDebugAction"
                     class="com.bap.dev.action.StartDebugAction"
-                    text="Start Debug"
-                    description="Run current class on cloud"
                     icon="AllIcons.Actions.StartDebugger"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
