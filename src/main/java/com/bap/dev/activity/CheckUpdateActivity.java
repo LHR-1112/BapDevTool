@@ -101,12 +101,6 @@ public class CheckUpdateActivity implements StartupActivity {
         String cleanCurrent = normalizeVersion(currentVersion);
         String cleanLatest = normalizeVersion(latest.version);
 
-        BapSettingsState s = BapSettingsState.getInstance();
-        if (s.ignoredVersion != null && !s.ignoredVersion.isBlank()
-                && normalizeVersion(s.ignoredVersion).equals(cleanLatest)) {
-            return;
-        }
-
         if (compareVersion(cleanLatest, cleanCurrent) > 0) {
             ApplicationManager.getApplication().invokeLater(
                     () -> showUpdateUi(project, currentVersion, latest.version, latest, isManual),
@@ -149,7 +143,7 @@ public class CheckUpdateActivity implements StartupActivity {
         String[] options = new String[] {
                 BapBundle.message("button.update_restart"), // "更新并重启"
                 BapBundle.message("button.github_download"), // "GitHub下载"
-                BapBundle.message("button.ignore_version"), // "忽略此版本"
+                BapBundle.message("button.cancel"),         // 索引 2: "取消" (新增)
         };
 
         int choice = Messages.showDialog(
@@ -172,7 +166,6 @@ public class CheckUpdateActivity implements StartupActivity {
                     BrowserUtil.browse(latestEntry.backupUrl);
                 }
             }
-            case 2 -> BapSettingsState.getInstance().ignoredVersion = latest;
             default -> { /* 关闭 */ }
         }
     }
@@ -197,11 +190,6 @@ public class CheckUpdateActivity implements StartupActivity {
                 BapBundle.message("title.plugin_update"), // "Bap Plugin Update" (Common)
                 content,
                 NotificationType.INFORMATION);
-
-        n.addAction(NotificationAction.createSimple(BapBundle.message("button.ignore_version"), () -> { // "忽略此版本"
-            BapSettingsState.getInstance().ignoredVersion = latest.version;
-            n.expire();
-        }));
 
         n.addAction(NotificationAction.createSimple(BapBundle.message("button.github_download"), () -> { // "GitHub下载"
             if (latest.backupUrl != null && !latest.backupUrl.isBlank()) {
