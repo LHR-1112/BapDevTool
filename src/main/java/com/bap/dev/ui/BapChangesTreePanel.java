@@ -283,9 +283,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 }
 
                 if (!moduleChanges.isEmpty()) {
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, BapBundle.message("status.modified"));
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, BapBundle.message("status.added"));
-                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, BapBundle.message("status.deleted"));
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.MODIFIED, BapBundle.message("status.modified"), moduleWrapper.rootFile);
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.ADDED, BapBundle.message("status.added"), moduleWrapper.rootFile);
+                    addStatusCategory(moduleNode, moduleChanges, BapFileStatus.DELETED_LOCALLY, BapBundle.message("status.deleted"), moduleWrapper.rootFile);
                 }
             }
 
@@ -424,31 +424,30 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
             // 使用 Set 去重 (防止父子节点同时选中导致重复)
             Set<VirtualFile> fileSet = new LinkedHashSet<>();
-
             for (TreePath path : paths) {
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-                Object userObj = node.getUserObject();
-
-                if (userObj instanceof VirtualFileWrapper) {
-                    // 1. 直接选中了文件
-                    fileSet.add(((VirtualFileWrapper) userObj).file);
-                } else if (userObj instanceof CategoryWrapper) {
-                    // 2. 选中了分类节点 (Modified/Added/Deleted) -> 收集所有子文件
-                    int childCount = node.getChildCount();
-                    for (int i = 0; i < childCount; i++) {
-                        TreeNode child = node.getChildAt(i);
-                        if (child instanceof DefaultMutableTreeNode) {
-                            Object childObj = ((DefaultMutableTreeNode) child).getUserObject();
-                            if (childObj instanceof VirtualFileWrapper) {
-                                fileSet.add(((VirtualFileWrapper) childObj).file);
-                            }
-                        }
-                    }
-                }
+                collectFilesFromNode(node, fileSet); // 🔴 抽取递归方法
             }
             return fileSet.isEmpty() ? null : fileSet.toArray(new VirtualFile[0]);
         }
         return super.getData(dataId);
+    }
+
+    // 🔴 递归收集文件 (处理 Category, Directory, File 节点)
+    private void collectFilesFromNode(DefaultMutableTreeNode node, Set<VirtualFile> fileSet) {
+        Object userObj = node.getUserObject();
+        if (userObj instanceof VirtualFileWrapper) {
+            fileSet.add(((VirtualFileWrapper) userObj).file);
+        } else if (userObj instanceof CategoryWrapper || userObj instanceof DirectoryWrapper) {
+            // 如果选中了分类或文件夹，递归收集子节点
+            int childCount = node.getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                TreeNode child = node.getChildAt(i);
+                if (child instanceof DefaultMutableTreeNode) {
+                    collectFilesFromNode((DefaultMutableTreeNode) child, fileSet);
+                }
+            }
+        }
     }
 
     // 1. 修改：让 Category 节点也能返回所属的 Module 根目录
@@ -592,7 +591,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             group.add(am.getAction("com.bap.dev.action.RelocateProjectAction"));
             group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));
 
-        } else if (userObject instanceof CategoryWrapper) {
+        } else if (userObject instanceof CategoryWrapper || userObject instanceof DirectoryWrapper) {
             // Category 节点 (Modified/Added/Deleted 分组)
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
             group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
@@ -618,17 +617,93 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     }
 
     // --- 3. 对应修改 addStatusCategory (参数类型变了) ---
-    private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFileWrapper>> map, BapFileStatus status, String title) {
-        List<VirtualFileWrapper> wrappers = map.get(status); // 🔴 List<VirtualFileWrapper>
+    private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFileWrapper>> map, BapFileStatus status, String title, VirtualFile moduleRoot) {
+        List<VirtualFileWrapper> wrappers = map.get(status);
         if (wrappers != null && !wrappers.isEmpty()) {
-            wrappers.sort(Comparator.comparing(w -> w.file.getName()));
+            // 按路径排序，保证树构建顺序
+            wrappers.sort(Comparator.comparing(w -> w.absolutePath));
+
             String nodeTitle = BapBundle.message("ui.BapChangesTreePanel.category.format", title, wrappers.size());
             DefaultMutableTreeNode categoryNode = new DefaultMutableTreeNode(new CategoryWrapper(nodeTitle, status));
             parent.add(categoryNode);
+
             for (VirtualFileWrapper wrapper : wrappers) {
-                categoryNode.add(new DefaultMutableTreeNode(wrapper));
+                // 1. 计算相对目录路径 (例如: com/bap/dev/ui)
+                String relativeDir = getRelativeDirectory(moduleRoot, wrapper.absolutePath);
+
+                // 2. 找到或创建父文件夹节点
+                DefaultMutableTreeNode parentNode = categoryNode;
+                if (!relativeDir.isEmpty()) {
+                    String[] dirs = relativeDir.split("/");
+                    for (String dirName : dirs) {
+                        if (dirName.isEmpty()) continue;
+                        parentNode = findOrCreateChildDir(parentNode, dirName);
+                    }
+                }
+
+                // 3. 添加文件节点
+                parentNode.add(new DefaultMutableTreeNode(wrapper));
             }
         }
+    }
+
+    // 🔴 新增：查找或创建文件夹节点
+    private DefaultMutableTreeNode findOrCreateChildDir(DefaultMutableTreeNode parent, String dirName) {
+        int count = parent.getChildCount();
+        // 简单线性查找 (子节点数量通常不多)
+        for (int i = 0; i < count; i++) {
+            DefaultMutableTreeNode child = (DefaultMutableTreeNode) parent.getChildAt(i);
+            Object userObj = child.getUserObject();
+            if (userObj instanceof DirectoryWrapper && ((DirectoryWrapper) userObj).name.equals(dirName)) {
+                return child;
+            }
+        }
+        // 未找到，创建新节点
+        DirectoryWrapper dirWrapper = new DirectoryWrapper(dirName);
+        DefaultMutableTreeNode newNode = new DefaultMutableTreeNode(dirWrapper);
+        parent.add(newNode);
+        return newNode;
+    }
+
+    // 🔴 新增：计算相对目录路径 (去除 src 前缀)
+    private String getRelativeDirectory(VirtualFile moduleRoot, String fileAbsolutePath) {
+        String rootPath = moduleRoot.getPath().replace('\\', '/');
+        String filePath = fileAbsolutePath.replace('\\', '/');
+
+        if (!filePath.startsWith(rootPath)) return "";
+
+        // 获取相对于模块根目录的路径
+        String relative = filePath.substring(rootPath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+
+        // 如果是 src/ 开头，去掉 src/ (为了更简洁的显示包结构)
+        if (relative.startsWith("src/")) {
+            relative = relative.substring(4);
+        } else if (relative.equals("src")) {
+            relative = "";
+        }
+
+        // 去掉文件名，只保留目录
+        int lastSlash = relative.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            return relative.substring(0, lastSlash);
+        }
+        return ""; // 文件就在根目录下 (或者 src 下)
+    }
+
+    // --- 🔴 新增：DirectoryWrapper 类 ---
+    private static class DirectoryWrapper {
+        String name;
+        DirectoryWrapper(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DirectoryWrapper that = (DirectoryWrapper) o;
+            return Objects.equals(name, that.name);
+        }
+        @Override public int hashCode() { return Objects.hash(name); }
     }
 
     // --- 🔴 修复布局：使用 FlowLayout 防止按钮错位 ---
@@ -715,6 +790,10 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                     else if (wrapper.status == BapFileStatus.DELETED_LOCALLY) attr = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, settings.getDeletedColorObj());
                     renderer.append(wrapper.title, attr);
                     renderer.setIcon(AllIcons.Nodes.Folder);
+                } else if (userObject instanceof DirectoryWrapper) {
+                    // 🔴 新增：DirectoryWrapper 渲染
+                    renderer.append(((DirectoryWrapper) userObject).name, SimpleTextAttributes.REGULAR_ATTRIBUTES);
+                    renderer.setIcon(AllIcons.Nodes.Package); // 使用包图标
                 } else if (userObject instanceof VirtualFileWrapper) {
                     VirtualFileWrapper wrapper = (VirtualFileWrapper) userObject;
                     SimpleTextAttributes attr = SimpleTextAttributes.REGULAR_ATTRIBUTES;
