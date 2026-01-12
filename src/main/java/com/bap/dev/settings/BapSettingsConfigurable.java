@@ -23,10 +23,10 @@ public class BapSettingsConfigurable implements Configurable {
 
     private JBCheckBox compileOnPublishCheckbox;
     private JBCheckBox autoRefreshCheckbox;
-    // --- 🔴 新增复选框 ---
     private JBCheckBox checkUpdateCheckbox;
-    // -------------------
 
+    // --- 🔴 新增 UI 组件 ---
+    private JBCheckBox confirmCommitCheckbox;
     private JBCheckBox showProjectNodeActionsCheckBox;
 
     private ColorPanel modifiedColorPanel;
@@ -49,6 +49,10 @@ public class BapSettingsConfigurable implements Configurable {
 
         // --- 🔴 初始化新增组件 ---
         checkUpdateCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.check_update")); // "启动时自动检查更新"
+
+        // --- 🔴 初始化组件 ---
+        confirmCommitCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.confirm_commit"));
+        // -------------------
 
         showProjectNodeActionsCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_project_node_actions")); // "显示工程节点右侧操作按钮"
 
@@ -81,6 +85,7 @@ public class BapSettingsConfigurable implements Configurable {
         return FormBuilder.createFormBuilder()
                 .addComponent(compileOnPublishCheckbox)
                 .addComponent(autoRefreshCheckbox)
+                .addComponent(confirmCommitCheckbox) // 🔴 添加到面板
                 .addComponent(updatePanel) // 添加更新配置行
                 .addComponent(showProjectNodeActionsCheckBox) // 添加更新配置行
                 .addSeparator()
@@ -110,6 +115,8 @@ public class BapSettingsConfigurable implements Configurable {
         boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
         // --- 🔴 检查新增配置 ---
         boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
+        // --- 🔴 检查修改 ---
+        boolean confirmCommitModified = confirmCommitCheckbox.isSelected() != settings.confirmBeforeCommit;
         boolean showProjectNodeModified = showProjectNodeActionsCheckBox.isSelected() != settings.showProjectNodeActions;
         // --------------------
 
@@ -122,7 +129,7 @@ public class BapSettingsConfigurable implements Configurable {
                 !isColorEqual(addedColorPanel.getSelectedColor(), settings.getAddedColorObj()) ||
                 !isColorEqual(deletedColorPanel.getSelectedColor(), settings.getDeletedColorObj());
 
-        return checkboxModified || autoRefreshModified || checkUpdateModified || showProjectNodeModified || listModified || colorModified;
+        return checkboxModified || autoRefreshModified || confirmCommitModified || checkUpdateModified || showProjectNodeModified || listModified || colorModified;
     }
 
     private boolean isColorEqual(Color c1, Color c2) {
@@ -137,9 +144,9 @@ public class BapSettingsConfigurable implements Configurable {
         settings.compileOnPublish = compileOnPublishCheckbox.isSelected();
         settings.autoRefresh = autoRefreshCheckbox.isSelected();
         // --- 🔴 保存新增配置 ---
+        settings.confirmBeforeCommit = confirmCommitCheckbox.isSelected();
         settings.checkUpdateOnStartup = checkUpdateCheckbox.isSelected();
         // --------------------
-
         settings.showProjectNodeActions = showProjectNodeActionsCheckBox.isSelected();
 
         List<String> uiUris = uriListModel.getItems();
@@ -165,6 +172,7 @@ public class BapSettingsConfigurable implements Configurable {
         compileOnPublishCheckbox.setSelected(settings.compileOnPublish);
         autoRefreshCheckbox.setSelected(settings.autoRefresh);
         // --- 🔴 重置新增配置 ---
+        confirmCommitCheckbox.setSelected(settings.confirmBeforeCommit);
         checkUpdateCheckbox.setSelected(settings.checkUpdateOnStartup);
         // --------------------
 
@@ -186,6 +194,7 @@ public class BapSettingsConfigurable implements Configurable {
         compileOnPublishCheckbox = null;
         autoRefreshCheckbox = null;
         checkUpdateCheckbox = null;
+        confirmCommitCheckbox = null;
         modifiedColorPanel = null;
         addedColorPanel = null;
         deletedColorPanel = null;

@@ -7,6 +7,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState;
 import com.bap.dev.ui.BapChangesTreePanel;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
@@ -71,49 +72,57 @@ public class CommitFileAction extends AnAction {
             return;
         }
 
-        // --- 🔴 新增：预先读取配置信息 ---
-        String targetUri = "Unknown";
-        String targetProject = "Unknown";
-        try {
-            File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
-            if (confFile.exists()) {
-                String content = Files.readString(confFile.toPath());
-                String uri = extractAttr(content, "Uri");
-                String projectUuid = extractAttr(content, "Project");
-                String user = extractAttr(content, "User");
-                String pwd = extractAttr(content, "Password");
+        // --- 🔴 修改：根据配置决定是否弹窗 ---
+        if (BapSettingsState.getInstance().confirmBeforeCommit) {
+            // 1. 弹窗模式：只有需要弹窗时，才去读取配置信息（优化性能）
+            String targetUri = "Unknown";
+            String targetProject = "Unknown";
+            try {
+                File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
+                if (confFile.exists()) {
+                    String content = Files.readString(confFile.toPath());
+                    String uri = extractAttr(content, "Uri");
+                    String projectUuid = extractAttr(content, "Project");
+                    String user = extractAttr(content, "User");
+                    String pwd = extractAttr(content, "Password");
 
-                if (uri != null) targetUri = uri;
+                    if (uri != null) targetUri = uri;
 
-                BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
-                CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
-                if (javaProject != null) {
-                    String name = javaProject.getName();
-                    if (name != null) targetProject = name;
-                }
-            }
-        } catch (Exception ignore) {}
-        // -----------------------------
-
-        // --- 修改开始：使用自定义合并弹窗 ---
-        CommitDialog dialog = new CommitDialog(project, Arrays.asList(selectedFiles), targetUri, targetProject);
-        if (dialog.showAndGet()) {
-            String comments = dialog.getComment();
-
-            ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.committing"), true) {
-                @Override
-                public void run(@NotNull ProgressIndicator indicator) {
-                    indicator.setIndeterminate(true);
-                    try {
-                        commitWithPackage(project, moduleRoot, selectedFiles, comments);
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                        showError(BapBundle.message("action.CommitFileAction.error.failed", ex.getMessage()));
+                    BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
+                    CJavaProjectDto javaProject = client.getService().getProject(projectUuid);
+                    if (javaProject != null) {
+                        String name = javaProject.getName();
+                        if (name != null) targetProject = name;
                     }
                 }
-            });
+            } catch (Exception ignore) {}
+
+            CommitDialog dialog = new CommitDialog(project, Arrays.asList(selectedFiles), targetUri, targetProject);
+            if (dialog.showAndGet()) {
+                String comments = dialog.getComment();
+                executeCommit(project, moduleRoot, selectedFiles, comments);
+            }
+        } else {
+            // 2. 静默模式：直接提交，无注释
+            executeCommit(project, moduleRoot, selectedFiles, "");
         }
-        // --- 修改结束 ---
+        // ---------------------------------
+    }
+
+    // --- 🔴 新增：抽取提交执行逻辑 ---
+    private void executeCommit(Project project, VirtualFile moduleRoot, VirtualFile[] selectedFiles, String comments) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("progress.committing"), true) {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                indicator.setIndeterminate(true);
+                try {
+                    commitWithPackage(project, moduleRoot, selectedFiles, comments);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    showError(BapBundle.message("action.CommitFileAction.error.failed", ex.getMessage()));
+                }
+            }
+        });
     }
 
     private void commitWithPackage(Project project, VirtualFile moduleRoot, VirtualFile[] files, String comments) throws Exception {

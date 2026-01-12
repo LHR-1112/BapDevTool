@@ -22,11 +22,9 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
 
     public boolean compileOnPublish = true;
     public boolean autoRefresh = false;
-
-    // --- 🔴 新增：启动时自动检查更新 ---
     public boolean checkUpdateOnStartup = true;
-    // --------------------------------
-
+    // --- 🔴 新增：提交前是否需要确认 ---
+    public boolean confirmBeforeCommit = true;
     public boolean showProjectNodeActions = true;
 
     public List<LoginProfile> loginHistory = new ArrayList<>();

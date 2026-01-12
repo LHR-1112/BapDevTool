@@ -8,6 +8,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState;
 import com.bap.dev.ui.BapChangesTreePanel;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
@@ -126,12 +127,21 @@ public class CommitAllAction extends AnAction {
                     // --------------------------------------------------
 
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        // 传入获取到的 targetInfo
-                        CommitDialog dialog = new CommitDialog(project, changedFiles, targetInfo[0], targetInfo[1]);
-                        if (dialog.showAndGet()) {
-                            String comments = dialog.getComment();
-                            startBatchCommit(project, moduleRoot, changedFiles, comments);
+                        // --- 🔴 修改：根据配置决定是否弹窗 ---
+                        boolean needConfirm = BapSettingsState.getInstance().confirmBeforeCommit;
+                        String comments = "";
+
+                        if (needConfirm) {
+                            CommitDialog dialog = new CommitDialog(project, changedFiles, targetInfo[0], targetInfo[1]);
+                            if (dialog.showAndGet()) {
+                                comments = dialog.getComment();
+                                startBatchCommit(project, moduleRoot, changedFiles, comments);
+                            }
+                        } else {
+                            // 直接提交，无注释
+                            startBatchCommit(project, moduleRoot, changedFiles, "");
                         }
+                        // ---------------------------------
                     });
 
                 } catch (Exception ex) {
