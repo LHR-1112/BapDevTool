@@ -76,6 +76,8 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         group.add(new ExpandAllAction());
         group.add(new CollapseAllAction());
         group.add(new LocateCurrentFileAction());
+        // 🔴 新增：扁平化切换按钮 (放在定位按钮后面)
+        group.add(new ToggleFlattenPackagesAction());
 
         group.addSeparator();
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateFileAction"));
@@ -620,24 +622,34 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
     private void addStatusCategory(DefaultMutableTreeNode parent, Map<BapFileStatus, List<VirtualFileWrapper>> map, BapFileStatus status, String title, VirtualFile moduleRoot) {
         List<VirtualFileWrapper> wrappers = map.get(status);
         if (wrappers != null && !wrappers.isEmpty()) {
-            // 按路径排序，保证树构建顺序
+            // 按路径排序
             wrappers.sort(Comparator.comparing(w -> w.absolutePath));
 
             String nodeTitle = BapBundle.message("ui.BapChangesTreePanel.category.format", title, wrappers.size());
             DefaultMutableTreeNode categoryNode = new DefaultMutableTreeNode(new CategoryWrapper(nodeTitle, status));
             parent.add(categoryNode);
 
+            // 获取配置状态
+            boolean isFlat = BapSettingsState.getInstance().flattenPackages;
+
             for (VirtualFileWrapper wrapper : wrappers) {
-                // 1. 计算相对目录路径 (例如: com/bap/dev/ui)
+                // 1. 计算相对目录路径 (已去除 src)
                 String relativeDir = getRelativeDirectory(moduleRoot, wrapper.absolutePath);
 
-                // 2. 找到或创建父文件夹节点
                 DefaultMutableTreeNode parentNode = categoryNode;
+
                 if (!relativeDir.isEmpty()) {
-                    String[] dirs = relativeDir.split("/");
-                    for (String dirName : dirs) {
-                        if (dirName.isEmpty()) continue;
-                        parentNode = findOrCreateChildDir(parentNode, dirName);
+                    if (isFlat) {
+                        // 🟢 扁平模式：将路径转换为点分隔包名 (例如 com.bap.dev)，直接创建一级节点
+                        String packageName = relativeDir.replace('/', '.');
+                        parentNode = findOrCreateChildDir(parentNode, packageName);
+                    } else {
+                        // 🔵 树状模式：递归创建嵌套节点 (com -> bap -> dev)
+                        String[] dirs = relativeDir.split("/");
+                        for (String dirName : dirs) {
+                            if (dirName.isEmpty()) continue;
+                            parentNode = findOrCreateChildDir(parentNode, dirName);
+                        }
                     }
                 }
 
@@ -859,6 +871,31 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         @Override
         public int hashCode() {
             return Objects.hash(absolutePath);
+        }
+    }
+
+    private class ToggleFlattenPackagesAction extends ToggleAction {
+        public ToggleFlattenPackagesAction() {
+            // 使用 IntelliJ 自带的 "Flatten Packages" 图标
+            super(BapBundle.message("ui.BapChangesTreePanel.flatten_packages"), // 建议在 Bundle 中添加: "Flatten Packages" 或 "扁平化包路径"
+                    "Toggle flat package view",
+                    AllIcons.ObjectBrowser.FlattenPackages);
+        }
+
+        @Override
+        public boolean isSelected(@NotNull AnActionEvent e) {
+            return BapSettingsState.getInstance().flattenPackages;
+        }
+
+        @Override
+        public void setSelected(@NotNull AnActionEvent e, boolean state) {
+            BapSettingsState.getInstance().flattenPackages = state;
+            rebuildTree(); // 切换后立即重绘树
+        }
+
+        @Override
+        public @NotNull ActionUpdateThread getActionUpdateThread() {
+            return ActionUpdateThread.BGT;
         }
     }
 }

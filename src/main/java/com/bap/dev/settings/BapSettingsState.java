@@ -28,6 +28,9 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public boolean confirmBeforeCommit = true;
     public boolean showProjectNodeActions = true;
 
+    // --- 🔴 新增：是否扁平化展示包路径 ---
+    public boolean flattenPackages = true;
+
     public List<LoginProfile> loginHistory = new ArrayList<>();
     public Map<String, List<RelocateProfile>> moduleRelocateHistory = new HashMap<>();
 
