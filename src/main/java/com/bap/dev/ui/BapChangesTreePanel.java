@@ -78,11 +78,15 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         group.add(new LocateCurrentFileAction());
 
         group.addSeparator();
-        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitFileAction"));
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateFileAction"));
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
+        group.addSeparator();
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitFileAction"));
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitFileAndPublishAction"));
         group.addSeparator();
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAction"));
-        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.UpdateAllAction"));
+        group.add(ActionManager.getInstance().getAction("com.bap.dev.action.CommitAllAndPublishAction"));
+        group.addSeparator();
         group.add(ActionManager.getInstance().getAction("com.bap.dev.action.PublishProjectAction"));
 
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BapChangesToolbar", group, true);
@@ -173,9 +177,9 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
 
         // ⚠️ 下面三项必须和你的 buttonPanel 布局一致
-        int n = 4;      // 你现在是 4 个按钮（含刷新）
-        int cellW = 18; // 建议固定成 18（见下方“同步渲染尺寸”）
-        int gap = 2;    // 你的 GridLayout hgap
+        int n = 5;
+        int cellW = 18;
+        int gap = 2;
 
         int totalW = n * cellW + (n - 1) * gap;
         int startX = rightEdge - totalW;
@@ -190,12 +194,13 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
 
         tree.setSelectionPath(path);
 
-        // ✅ index 映射必须与你 buttonPanel.add 顺序一致
+        // 🔴 修改 2: 增加 case 3 处理 CommitAllAndPublishAction
         switch (index) {
             case 0 -> runAction("com.bap.dev.action.RefreshProjectAction", e);
             case 1 -> runAction("com.bap.dev.action.UpdateAllAction", e);
             case 2 -> runAction("com.bap.dev.action.CommitAllAction", e);
-            case 3 -> runAction("com.bap.dev.action.PublishProjectAction", e);
+            case 3 -> runAction("com.bap.dev.action.CommitAllAndPublishAction", e); // 新增：提交并发布
+            case 4 -> runAction("com.bap.dev.action.PublishProjectAction", e);
         }
     }
 
@@ -570,6 +575,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         ActionManager am = ActionManager.getInstance();
 
         if (userObject instanceof ModuleWrapper) {
+            // Module 节点
             group.add(am.getAction("com.bap.dev.action.RefreshProjectAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.UpdateLibsAction"));
@@ -578,19 +584,28 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CommitAllAction"));
+            // 🔴 新增
             group.add(am.getAction("com.bap.dev.action.CommitAllAndPublishAction"));
+
             group.add(am.getAction("com.bap.dev.action.PublishProjectAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.RelocateProjectAction"));
             group.add(am.getAction("com.bap.dev.action.OpenAdminToolAction"));
+
         } else if (userObject instanceof CategoryWrapper) {
-            group.add(am.getAction("com.bap.dev.action.UpdateFileAction")); // 批量更新
-            group.add(am.getAction("com.bap.dev.action.CommitFileAction")); // 批量提交
-            group.add(am.getAction("com.bap.dev.action.CommitFileAndPublishAction"));
-        } else if (userObject instanceof VirtualFileWrapper) {
+            // Category 节点 (Modified/Added/Deleted 分组)
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
             group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
+            // 🔴 新增
             group.add(am.getAction("com.bap.dev.action.CommitFileAndPublishAction"));
+
+        } else if (userObject instanceof VirtualFileWrapper) {
+            // File 节点
+            group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
+            group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
+            // 🔴 新增
+            group.add(am.getAction("com.bap.dev.action.CommitFileAndPublishAction"));
+
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CompareJavaCodeAction"));
             group.add(am.getAction("com.bap.dev.action.ShowHistoryAction"));
@@ -644,16 +659,18 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 renderContent(this, value);
             }
         };
-        private final JPanel buttonPanel = new JPanel(new GridLayout(1, 4, 2, 0));
+        private final JPanel buttonPanel = new JPanel(new GridLayout(1, 5, 2, 0));
 
         public BapChangeRenderer() {
             modulePanel.setOpaque(true);
             buttonPanel.setOpaque(false);
 
-            buttonPanel.add(iconLabel(AllIcons.Actions.Refresh));
-            buttonPanel.add(iconLabel(AllIcons.Actions.CheckOut));
-            buttonPanel.add(iconLabel(AllIcons.Actions.Commit));
-            buttonPanel.add(iconLabel(AllIcons.Actions.Execute));
+            // 🔴 修改 4: 同步图标并添加新按钮
+            buttonPanel.add(iconLabel(AllIcons.Actions.Refresh)); // Refresh
+            buttonPanel.add(iconLabel(AllIcons.Actions.CheckOut)); // Update (plugin.xml: CheckOut)
+            buttonPanel.add(iconLabel(AllIcons.Actions.AddList));  // Commit (plugin.xml: AddList) -> 替换了原来的 Actions.Commit
+            buttonPanel.add(iconLabel(AllIcons.RunConfigurations.Compound)); // 🔴 新增：Commit & Publish
+            buttonPanel.add(iconLabel(AllIcons.Actions.Execute)); // Publish
 
             modulePanel.add(moduleTextRenderer);
             modulePanel.add(buttonPanel);

@@ -85,20 +85,21 @@
             <separator/>
             <action id="com.bap.dev.action.CommitAllAction"
                     class="com.bap.dev.action.CommitAllAction"
-                    icon="AllIcons.Actions.Commit"/>
+                    icon="AllIcons.Actions.AddList"/>
             <action id="com.bap.dev.action.CommitAllAndPublishAction"
                     class="com.bap.dev.action.CommitAllAndPublishAction"
-                    icon="AllIcons.Actions.Commit"/>
+                    icon="AllIcons.RunConfigurations.Compound"/>
+            <separator/>
             <action id="com.bap.dev.action.CommitFileAction"
                     class="com.bap.dev.action.CommitFileAction"
                     icon="AllIcons.Actions.Upload"/>
             <action id="com.bap.dev.action.CommitFileAndPublishAction"
                     class="com.bap.dev.action.CommitFileAndPublishAction"
-                    icon="AllIcons.Actions.Upload"/>
+                    icon="AllIcons.RunConfigurations.Compound"/>
+            <separator/>
             <action id="com.bap.dev.action.PublishProjectAction"
                     class="com.bap.dev.action.PublishProjectAction"
                     icon="AllIcons.Actions.Execute"/>
-            <separator/>
             <action id="com.bap.dev.action.RelocateProjectAction"
                     class="com.bap.dev.action.RelocateProjectAction"
                     icon="AllIcons.Nodes.Project"/>
