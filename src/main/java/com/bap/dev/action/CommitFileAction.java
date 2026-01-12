@@ -18,6 +18,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -49,6 +50,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class CommitFileAction extends AnAction {
+
+    private static final Logger LOG = Logger.getInstance(CommitFileAction.class);
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -178,8 +181,20 @@ public class CommitFileAction extends AnAction {
 
         String folderName = "res";
 
-        // 1. 删除逻辑
-        if (status == BapFileStatus.DELETED_LOCALLY) {
+        if (status == BapFileStatus.DELETED_LOCALLY || !file.exists() || !file.isInLocalFileSystem()) {
+            Set<String> deleteSet = deleteMap.computeIfAbsent(folderName, k -> new HashSet<>());
+
+            // 🔴 修正：根据您的指示，所有 value 前加上 "/"
+            String pathToDelete = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
+
+            deleteSet.add(pathToDelete);
+
+            return;
+        }
+
+        // 2) 兜底：placeholder / 本地不存在的 file，一律不要走“上传空文件”，而是按删除处理
+        // （尤其是 LightVirtualFile / exists()==false 的情况）
+        if (!file.exists() || !file.isInLocalFileSystem()) {
             deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(relativePath);
             return;
         }
@@ -193,6 +208,8 @@ public class CommitFileAction extends AnAction {
         int lastSlash = relativePath.lastIndexOf('/');
         if (lastSlash >= 0) {
             dto.setFilePackage(relativePath.substring(0, lastSlash).replace('/', '.'));
+        } else {
+            dto.setFilePackage(""); // 或者不 set（但建议显式置空，避免后端把 null 当成别的含义）
         }
 
         dto.setFileBin(content);
@@ -336,24 +353,38 @@ public class CommitFileAction extends AnAction {
         return extractAttr(content, "Project");
     }
 
-    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null && VfsUtilCore.isAncestor(resDir, file, true);
+    private VirtualFile findResDir(VirtualFile moduleRoot) {
+        VirtualFile resDir = moduleRoot.findFileByRelativePath("res");
+        if (resDir != null) return resDir;
+        return moduleRoot.findFileByRelativePath("src/res");
     }
 
-    private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        if (resDir == null) return null;
+    // --- 🔴 修改：使用 String 路径计算 (不依赖物理文件夹存在) ---
+    private String getResDirPath(VirtualFile moduleRoot) {
+        return moduleRoot.getPath().replace('\\', '/') + "/src/res";
+    }
 
-        String resPath = resDir.getPath().replace('\\', '/');
+    // --- 🔴 修改：基于路径字符串判断 ---
+    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
+        String filePath = file.getPath().replace('\\', '/');
+        // 兼容: 直接是 src/res 本身，或是其子文件
+        return filePath.equals(resPath) || filePath.startsWith(resPath + "/");
+    }
+
+    // --- 🔴 修改：基于路径字符串计算相对路径 ---
+    private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
         String filePath = file.getPath().replace('\\', '/');
 
         if (!filePath.startsWith(resPath)) return null;
 
         String relative = filePath.substring(resPath.length());
         if (relative.startsWith("/")) relative = relative.substring(1);
+
         return relative.isEmpty() ? null : relative;
     }
+
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {

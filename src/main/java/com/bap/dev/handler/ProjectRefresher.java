@@ -289,7 +289,7 @@ public class ProjectRefresher {
                 createJavaPlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", folderName)); // "Failed to refresh java folder: " + folderName
+            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", client.getUri() + "_" + folderName)); // "Failed to refresh java folder: " + folderName
         }
     }
 

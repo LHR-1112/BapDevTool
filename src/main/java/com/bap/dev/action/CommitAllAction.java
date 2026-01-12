@@ -19,6 +19,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -53,6 +54,8 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.testFramework.LightVirtualFile;
 
 public class CommitAllAction extends AnAction {
+
+    private static final Logger LOG = Logger.getInstance(CommitAllAction.class);
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -202,28 +205,31 @@ public class CommitAllAction extends AnAction {
                                  Map<String, List<CResFileDto>> updateMap,
                                  Map<String, Set<String>> deleteMap) throws Exception {
 
-        BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+        BapFileStatus status = getStatusByPath(project, file);
         String relativePath = getResourceRelativePath(moduleRoot, file);
         if (relativePath == null) return;
 
         String folderName = "res";
 
-        // 删除逻辑
-        if (status == BapFileStatus.DELETED_LOCALLY) {
-            deleteMap.computeIfAbsent(folderName, k -> new HashSet<>()).add(relativePath);
+        // 🔴 调试日志：确认是否进入删除逻辑
+        if (status == BapFileStatus.DELETED_LOCALLY || !file.exists()) {
+            Set<String> deleteSet = deleteMap.computeIfAbsent(folderName, k -> new HashSet<>());
+            // 🔴 同样加上 "/" 前缀
+            String pathToDelete = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
+            deleteSet.add(pathToDelete);
             return;
         }
+
 
         // 新增/修改逻辑
         byte[] content = file.contentsToByteArray();
         CResFileDto dto = new CResFileDto();
-        dto.setFilePackage(relativePath);
         dto.setFileName(file.getName());
-
         int lastSlash = relativePath.lastIndexOf('/');
         if (lastSlash >= 0) {
             dto.setFilePackage(relativePath.substring(0, lastSlash).replace('/', '.'));
         }
+        dto.setFilePackage(lastSlash >= 0 ? relativePath.substring(0, lastSlash).replace('/', '.') : "");
 
         dto.setFileBin(content);
         dto.setSize((long) content.length);
@@ -246,7 +252,7 @@ public class CommitAllAction extends AnAction {
                              Map<String, List<CJavaCode>> updateMap,
                              Map<String, Set<String>> deleteMap) throws Exception {
 
-        BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+        BapFileStatus status = getStatusByPath(project, file);
         String fullClassName = resolveClassName(project, file);
         if (fullClassName == null) return;
 
@@ -300,35 +306,45 @@ public class CommitAllAction extends AnAction {
     // 🔴 修改：增加 moduleRoot 参数
     private void onSuccess(Project project, List<VirtualFile> files, VirtualFile moduleRoot) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            List<VirtualFile> toDelete = new ArrayList<>();
+            List<VirtualFile> toDeleteLocalFiles = new ArrayList<>();
 
             for (VirtualFile file : files) {
-                BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+                BapFileStatusService ss = BapFileStatusService.getInstance(project);
+                BapFileStatus status = getStatusForCommit(project, file);
 
                 if (status == BapFileStatus.DELETED_LOCALLY) {
-                    toDelete.add(file);
-                } else if (file.isValid()) {
-                    BapFileStatusService.getInstance(project).setStatus(file, BapFileStatus.NORMAL);
-                    file.refresh(false, false);
+                    // ✅ 纯内存占位：不要 delete()，只需要把 path 的状态清掉
+                    if (file.isInLocalFileSystem() && file.exists()) {
+                        // 真正存在的本地文件（你现在理论上不应该有，但保留兼容）
+                        toDeleteLocalFiles.add(file);
+                    } else {
+                        ss.setStatus(file.getPath(), BapFileStatus.NORMAL);  // ✅ 关键
+                    }
+                } else {
+                    // 其他状态（MODIFIED/ADDED等）提交成功后同样清掉状态
+                    ss.setStatus(file.getPath(), BapFileStatus.NORMAL);      // ✅ 建议统一按 path
+                    if (file.isValid() && file.isInLocalFileSystem()) {
+                        file.refresh(false, false);
+                    }
                 }
             }
 
-            if (!toDelete.isEmpty()) {
+            if (!toDeleteLocalFiles.isEmpty()) {
                 try {
                     WriteAction.run(() -> {
-                        for(VirtualFile f : toDelete) {
+                        for (VirtualFile f : toDeleteLocalFiles) {
                             BapFileStatusService.getInstance(project).setStatus(f, BapFileStatus.NORMAL);
-                            if(f.isValid()) {
+                            if (f.isValid()) {
                                 try {
-                                    f.delete(this);
+                                    f.delete(this); // ✅ 这里只会对本地真实文件执行
                                 } catch (java.io.IOException e) {
-                                    e.printStackTrace();
+                                    LOG.warn("[CommitAllAction] delete local file failed: " + f.getPath(), e);
                                 }
                             }
                         }
                     });
-                } catch (Exception ignore) {
-                    ignore.printStackTrace();
+                } catch (Exception ex) {
+                    LOG.warn("[CommitAllAction] WriteAction delete local files failed", ex);
                 }
             }
 
@@ -379,15 +395,46 @@ public class CommitAllAction extends AnAction {
         Notifications.Bus.notify(notification, project);
     }
 
-    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null && VfsUtilCore.isAncestor(resDir, file, true);
+    private VirtualFile findResDir(VirtualFile moduleRoot) {
+        VirtualFile resDir = moduleRoot.findFileByRelativePath("res");
+        if (resDir != null) return resDir;
+        return moduleRoot.findFileByRelativePath("src/res");
     }
 
+    // --- 🔴 修改 1: 改为返回 String 路径，不依赖物理目录存在 ---
+    @Nullable
+    private String getResDirPath(VirtualFile moduleRoot) {
+        // 优先检查 src/res
+        String modulePath = moduleRoot.getPath().replace('\\', '/');
+
+        // 即使物理目录不存在，只要路径匹配，我们也能算出相对路径
+        // 这里假设标准结构是 src/res
+        return modulePath + "/src/res";
+    }
+
+    // --- 🔴 修改 2: 基于路径字符串判断 ---
+    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
+        if (resPath == null) return false;
+
+        String filePath = file.getPath().replace('\\', '/');
+        // 检查文件是否在 res 目录下 (包含子目录)
+        return filePath.startsWith(resPath + "/");
+    }
+
+    // --- 🔴 修改 3: 基于路径字符串计算相对路径 ---
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        if (resDir == null) return null;
-        return getPathRelativeTo(resDir, file);
+        String resPath = getResDirPath(moduleRoot);
+        if (resPath == null) return null;
+
+        String filePath = file.getPath().replace('\\', '/');
+        if (!filePath.startsWith(resPath)) return null;
+
+        String relative = filePath.substring(resPath.length());
+        // 去掉开头的 /
+        if (relative.startsWith("/")) relative = relative.substring(1);
+
+        return relative.isEmpty() ? null : relative;
     }
 
     @Nullable
@@ -624,5 +671,39 @@ public class CommitAllAction extends AnAction {
             }
             return sb.toString();
         }
+    }
+
+    private BapFileStatus getStatusByPath(Project project, VirtualFile file) {
+        BapFileStatusService ss = BapFileStatusService.getInstance(project);
+
+        // 先走原来的
+        BapFileStatus st = ss.getStatus(file);
+
+        // 对 placeholder / LightVirtualFile / 被删文件，兜底走 path map
+        if (st == null || st == BapFileStatus.NORMAL) {
+            Map<String, BapFileStatus> all = ss.getAllStatuses();
+            if (all != null) {
+                BapFileStatus st2 = all.get(file.getPath());
+                if (st2 != null) st = st2;
+            }
+        }
+        return st == null ? BapFileStatus.NORMAL : st;
+    }
+
+    private BapFileStatus getStatusForCommit(Project project, VirtualFile file) {
+        BapFileStatusService ss = BapFileStatusService.getInstance(project);
+
+        // 1) 先尝试原有方式
+        BapFileStatus st = ss.getStatus(file);
+
+        // 2) 对 LightVirtualFile / deleted placeholder，兜底走 path->status
+        if (st == null || st == BapFileStatus.NORMAL) {
+            Map<String, BapFileStatus> all = ss.getAllStatuses();
+            if (all != null) {
+                BapFileStatus st2 = all.get(file.getPath());
+                if (st2 != null) st = st2;
+            }
+        }
+        return st == null ? BapFileStatus.NORMAL : st;
     }
 }
