@@ -5,6 +5,7 @@ import com.cdao.CDaoConst;
 import com.cdao.mgr.CSession;
 import com.leavay.nio.crpc.CRpcAdapter;
 import com.leavay.nio.crpc.CRpcClientWrapper;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.net.URI;
 
@@ -12,6 +13,7 @@ import java.net.URI;
  * 负责管理 RPC 连接、登录和会话
  */
 public class BapRpcClient {
+    private static final Logger LOG = Logger.getInstance(BapRpcClient.class);
 
     private CRpcClientWrapper<CJavaCenterIntf> rpcWrapper;
 
@@ -28,7 +30,7 @@ public class BapRpcClient {
             shutdown();
         }
 
-        System.out.println("BapRpcClient: Connecting to " + uri + "...");
+        LOG.info("BapRpcClient: Connecting to " + uri + "...");
 
         rpcWrapper = new CRpcClientWrapper<>(CJavaCenterIntf.class, URI.create(uri)) {
             public CRpcAdapter getAdapter() {
@@ -45,7 +47,7 @@ public class BapRpcClient {
         this.currentUser = user;
         this.currentPwd = pwd;
 
-        System.out.println("BapRpcClient: Connected and Logged in as " + user);
+        LOG.info("BapRpcClient: Connected and Logged in as " + user);
     }
 
     /**

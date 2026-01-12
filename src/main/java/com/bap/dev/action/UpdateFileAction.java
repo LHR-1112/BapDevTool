@@ -18,6 +18,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -41,6 +42,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UpdateFileAction extends AnAction {
+
+    private static final Logger LOG = Logger.getInstance(UpdateFileAction.class);
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -161,7 +164,7 @@ public class UpdateFileAction extends AnAction {
                     // 如果想强行同步（即删除本地），可以使用 deleteLocalFile(project, file);
 
                     deleteLocalFile(project, file);
-                    System.out.println("Skipping local-only file: " + file.getName());
+                    LOG.info("Skipping local-only file: " + file.getName());
                 }
             }
         } finally {
@@ -205,7 +208,7 @@ public class UpdateFileAction extends AnAction {
                 overwriteFile(project, file, codeContent.getBytes(StandardCharsets.UTF_8));
             } else {
                 // 同上，对于 Java 文件，如果是本地新增的，Update 操作默认忽略
-                System.out.println("Skipping local-only file: " + file.getName());
+                LOG.info("Skipping local-only file: " + file.getName());
             }
         } finally {
             client.shutdown();

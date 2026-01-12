@@ -51,7 +51,7 @@ public class BapAutoRefreshListener implements BulkFileListener {
             VirtualFile moduleRoot = BapUtils.findModuleRoot(file);
 
             if (moduleRoot != null) {
-                System.out.println("检测到变更，准备自动刷新: " + moduleRoot.getName());
+                LOG.info("检测到变更，准备自动刷新: " + moduleRoot.getName());
                 modulesToRefresh.add(moduleRoot);
             }
         }
@@ -69,7 +69,7 @@ public class BapAutoRefreshListener implements BulkFileListener {
             // 二次检查：防止在防抖期间用户关闭了开关
             if (!BapSettingsState.getInstance().autoRefresh) return;
 
-            System.out.println(">>> 执行自动刷新 <<<");
+            LOG.info(">>> 执行自动刷新 <<<");
 
             ProjectRefresher refresher = new ProjectRefresher(project);
             for (VirtualFile moduleRoot : modules) {

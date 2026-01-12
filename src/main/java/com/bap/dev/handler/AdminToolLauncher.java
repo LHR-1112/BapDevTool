@@ -11,6 +11,7 @@ import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -32,6 +33,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class AdminToolLauncher {
+
+    private static final Logger LOG = Logger.getInstance(AdminToolLauncher.class);
 
     public static void launch(Project project, VirtualFile moduleRoot) {
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
@@ -120,7 +123,7 @@ public class AdminToolLauncher {
                 public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
                     // 将子进程的输出打印到 IDEA 的 Log 中，或者如果您有 ConsoleView 可以打印到那里
                     // 这里为了简单，先打印到系统控制台（在 IDEA 的 idea.log 或启动终端可见）
-                    System.out.println("[AdminTool] " + event.getText());
+                    LOG.info("[AdminTool] " + event.getText());
                 }
 
                 @Override

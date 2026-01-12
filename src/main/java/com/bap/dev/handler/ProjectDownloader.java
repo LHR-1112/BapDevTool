@@ -6,6 +6,7 @@ import bap.java.CJavaProjectDto;
 import cn.hutool.core.util.StrUtil;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.i18n.BapBundle;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.leavay.common.util.ProgressCtrl.ProgressControllerFEIntf;
 import com.leavay.common.util.ProgressCtrl.crpc.CProgressProxy;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger; // 引入 AtomicInteger
 public class ProjectDownloader {
 
     private final BapRpcClient client = new BapRpcClient();
+    private static final Logger LOG = Logger.getInstance(ProjectDownloader.class);
 
     public void connect(String uri, String user, String pwd) throws Exception {
         client.connect(uri, user, pwd);
@@ -44,7 +46,7 @@ public class ProjectDownloader {
             moduleFolder.mkdirs();
         }
 
-        System.out.println(BapBundle.message("handler.ProjectDownloader.log.downloading", safeName, moduleFolder.getAbsolutePath())); // "Downloading Project [...] into [...]"
+        LOG.info(BapBundle.message("handler.ProjectDownloader.log.downloading", safeName, moduleFolder.getAbsolutePath())); // "Downloading Project [...] into [...]"
 
         Set<String> folderSet = new HashSet<>();
         if (folders != null && !folders.isEmpty()) {
@@ -56,7 +58,7 @@ public class ProjectDownloader {
                     for (CJavaFolderDto f : allFolders) folderSet.add(f.getName());
                 }
             } catch (Exception e) {
-                System.err.println(BapBundle.message("handler.ProjectDownloader.error.fetch_folders")); // "Fetch folders failed, ignore."
+                LOG.error(BapBundle.message("handler.ProjectDownloader.error.fetch_folders")); // "Fetch folders failed, ignore."
             }
         }
 
@@ -135,7 +137,7 @@ public class ProjectDownloader {
                 client.getService().streamExportProject(srvProg, projectUuid, folderSet, null);
             }
 
-            System.out.println(BapBundle.message("handler.ProjectDownloader.log.unzipping_to", moduleFolder.getAbsolutePath())); // "Unzipping to: ..."
+            LOG.info(BapBundle.message("handler.ProjectDownloader.log.unzipping_to", moduleFolder.getAbsolutePath())); // "Unzipping to: ..."
             if (indicator != null) {
                 indicator.setIndeterminate(true);
                 // 修改6: Indicator Text (复用 common)

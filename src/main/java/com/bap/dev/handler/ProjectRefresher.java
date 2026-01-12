@@ -14,6 +14,7 @@ import com.bap.dev.ui.BapChangesTreePanel;
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.module.Module;
@@ -43,6 +44,7 @@ import java.util.regex.Pattern;
 public class ProjectRefresher {
 
     private final Project project;
+    private static final Logger LOG = Logger.getInstance(ProjectRefresher.class);
 
     public ProjectRefresher(Project project) {
         this.project = project;
@@ -61,7 +63,7 @@ public class ProjectRefresher {
             for (VirtualFile root : contentRoots) {
                 // 只要根目录下有 .develop 文件，就认为是 Bap 模块
                 if (root.findChild(CJavaConst.PROJECT_DEVELOP_CONF_FILE) != null) {
-                    System.out.println(BapBundle.message("handler.ProjectRefresher.log.auto_refresh", module.getName())); // "Auto-refreshing module: " + module.getName()
+                    LOG.info(BapBundle.message("handler.ProjectRefresher.log.auto_refresh", module.getName())); // "Auto-refreshing module: " + module.getName()
                     refreshModule(root, true);
                     // 一个模块刷新一次即可 (假设只有一个根是 Bap 根)
                     break;
@@ -192,7 +194,7 @@ public class ProjectRefresher {
     private void showError(String title, String content, boolean silentMode) {
         if (silentMode) {
             // 静默模式下只打印 Log，不打扰用户
-            System.err.println("[" + title + "] " + content);
+            LOG.error("[" + title + "] " + content);
         } else {
             // 手动模式下弹窗
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -237,7 +239,7 @@ public class ProjectRefresher {
                 createResourcePlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            System.err.println(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage())); // "Failed to refresh res folder: " + e.getMessage()
+            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage())); // "Failed to refresh res folder: " + e.getMessage()
         }
     }
 
@@ -246,7 +248,7 @@ public class ProjectRefresher {
             CResFileDto resFile = client.getService().getResFile(projectUuid, relativePath, false);
             if (resFile != null) {
                 statusService.setStatus(file, BapFileStatus.NORMAL);
-                System.out.println(BapBundle.message("handler.ProjectRefresher.log.double_check", relativePath)); // "Double check found file: " + relativePath
+                LOG.info(BapBundle.message("handler.ProjectRefresher.log.double_check", relativePath)); // "Double check found file: " + relativePath
             } else {
                 statusService.setStatus(file, BapFileStatus.ADDED);
             }
@@ -287,7 +289,7 @@ public class ProjectRefresher {
                 createJavaPlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            System.err.println(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", folderName)); // "Failed to refresh java folder: " + folderName
+            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", folderName)); // "Failed to refresh java folder: " + folderName
         }
     }
 
