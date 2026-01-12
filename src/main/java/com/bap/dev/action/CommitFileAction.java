@@ -279,7 +279,7 @@ public class CommitFileAction extends AnAction {
     }
 
     // 🔴 修改：增加 moduleRoot 参数 (注意：原参数类型是 VirtualFile[]，这里统一一下，或者转为 List)
-    private void onSuccess(Project project, VirtualFile[] files, VirtualFile moduleRoot) {
+    protected void onSuccess(Project project, VirtualFile[] files, VirtualFile moduleRoot) {
         ApplicationManager.getApplication().invokeLater(() -> {
             List<VirtualFile> toDelete = new ArrayList<>();
             BapFileStatusService statusService = BapFileStatusService.getInstance(project);

@@ -578,6 +578,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CommitAllAction"));
+            group.add(am.getAction("com.bap.dev.action.CommitAllAndPublishAction"));
             group.add(am.getAction("com.bap.dev.action.PublishProjectAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.RelocateProjectAction"));
@@ -585,9 +586,11 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         } else if (userObject instanceof CategoryWrapper) {
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction")); // 批量更新
             group.add(am.getAction("com.bap.dev.action.CommitFileAction")); // 批量提交
+            group.add(am.getAction("com.bap.dev.action.CommitFileAndPublishAction"));
         } else if (userObject instanceof VirtualFileWrapper) {
             group.add(am.getAction("com.bap.dev.action.UpdateFileAction"));
             group.add(am.getAction("com.bap.dev.action.CommitFileAction"));
+            group.add(am.getAction("com.bap.dev.action.CommitFileAndPublishAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.CompareJavaCodeAction"));
             group.add(am.getAction("com.bap.dev.action.ShowHistoryAction"));

@@ -314,7 +314,7 @@ public class CommitAllAction extends AnAction {
     }
 
     // 🔴 修改：增加 moduleRoot 参数
-    private void onSuccess(Project project, List<VirtualFile> files, VirtualFile moduleRoot) {
+    protected void onSuccess(Project project, List<VirtualFile> files, VirtualFile moduleRoot) {
         ApplicationManager.getApplication().invokeLater(() -> {
             List<VirtualFile> toDeleteLocalFiles = new ArrayList<>();
 
