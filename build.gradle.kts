@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.2.3"
+version = "1.3"
 
 repositories {
     mavenCentral()
@@ -70,12 +70,20 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
-            <h3>v1.2.5</h3>
+            <h3>v1.3</h3>
             <ul>
-                <li><b>新特性</b>：BapChanges界面，在工程根节点的右侧加上一些工程级的操作</li>
+                <li><b>新特性</b>：BapChanges界面，在工程根节点上增加一些快捷操作</li>
                 <li><b>新特性</b>：添加一键更新插件并重启的能力，同时保留github下载的入口</li>
-                <li><b>特性修改</b>：修改项目历史的查询逻辑，增加资源文件历史的展示</li>
-                <li><b>特性修改</b>：修改文件历史的查询逻辑，增加资源文件历史的展示</li>
+                <li><b>新特性</b>：修改项目历史的查询逻辑，增加资源文件历史的展示</li>
+                <li><b>新特性</b>：修改文件历史的查询逻辑，增加资源文件历史的展示</li>
+                <li><b>bug修复</b>：修复设置界面点击检查更新无反应的问题</li>
+                <li><b>新特性</b>：适配i18n</li>
+                <li><b>新特性</b>：BapChanges界面，Modified/Added/Deleted三个节点增加右键菜单</li>
+                <li><b>新特性</b>：文件状态检测过滤掉“.DS_Store”</li>
+                <li><b>特性修改</b>：去除顶栏Bap目录和下载项目、设置选项的图标</li>
+                <li><b>特性修改</b>：红D文件原来的逻辑是在本地的文件系统中添加一个空文件作为占位符，改成使用内存中的 LightVirtualFile 来代替物理文件进行展示，不再在本地生成占位缓存文件</li>
+                <li><b>特性修改</b>：更新日志的打印方式</li>
+                <li><b>bug修复</b>：修复在资源文件根目录的文件commit后会套上一个同名文件夹，导致Idea报错崩溃的问题</li>
             </ul>
             
             <h3>v1.2.4</h3>
@@ -89,7 +97,7 @@ intellijPlatform {
             <h3>v1.2.3</h3>
             <ul>
                 <li><b>新特性</b>：工程relocate的历史记录，增加删除功能</li>
-                <li><b>bug</b>：更新依赖jar包：tcmcat-bap.jar</li>
+                <li><b>bug修复</b>：更新依赖jar包：tcmcat-bap.jar</li>
                 <li><b>新特性</b>：下载工程的时候，加上进度条提醒和网速显示</li>
                 <li><b>新特性</b>：下载工程的时候，添加终止下载的能力</li>
                 <li><b>新特性</b>：拉取工程时提供选项：新建一个项目、作为当前项目的一个模块</li>
