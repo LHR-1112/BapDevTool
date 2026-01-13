@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.3.1"
+version = "1.3.2"
 
 repositories {
     mavenCentral()
@@ -70,6 +70,11 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.3.2</h3>
+            <ul>
+                <li><b>特性修改</b>：一键更新弃用原来的接口，改为私仓更新</li>
+            </ul>
+            
             <h3>v1.3.1</h3>
             <ul>
                 <li><b>新特性</b>：新增设置：commit是否需要确认</li>

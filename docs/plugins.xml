@@ -12,11 +12,7 @@
 基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
         <change-notes><![CDATA[
-1.新增设置：commit是否需要确认
-2.新增两个动作：CommitFileAndPublishAction、CommitAllAndPublishAction
-3.更改右键菜单，BapChangesTreePanel的按钮图标及布局
-4.BapChangesTreePanel文件增加包路径显示，不再平铺
-5.BapChangesTreePanel添加switch：扁平化/树形展示包路径
+1.一键更新弃用原来的接口，改为私仓更新
     ]]></change-notes>
     </plugin>
 </plugins>
