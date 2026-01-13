@@ -7,7 +7,7 @@
         <backup-url>https://github.com/LHR-1112/BapDevTool/releases/download/v1.3.1/BapDevTool-1.3.1.zip</backup-url>
         <name>BapDevPlugin</name>
         <idea-version since-build="223.0"/>
-        <vendor>LHR-1112</vendor>
+        <vendor>LHR_1112</vendor>
         <description><![CDATA[
 基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
