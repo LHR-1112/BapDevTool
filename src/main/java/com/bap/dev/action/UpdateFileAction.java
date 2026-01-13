@@ -19,7 +19,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -27,7 +26,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
@@ -375,7 +373,7 @@ public class UpdateFileAction extends AnAction {
 
     private void sendNotification(Project project, String title, String content, NotificationType type) {
         Notification notification = new Notification(
-                BapBundle.message("notification.group.cloud.download"), // "Cloud Project Download"
+                BapBundle.message("notification.group.bap"), // "Cloud Project Download"
                 title, content, type);
         Notifications.Bus.notify(notification, project);
     }

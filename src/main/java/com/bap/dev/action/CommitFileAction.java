@@ -468,7 +468,7 @@ public class CommitFileAction extends AnAction {
     }
 
     private void sendNotification(Project project, String title, String content) {
-        Notification notification = new Notification("Cloud Project Download", title, content, NotificationType.INFORMATION);
+        Notification notification = new Notification(BapBundle.message("notification.group.bap"), title, content, NotificationType.INFORMATION);
         Notifications.Bus.notify(notification, project);
     }
 

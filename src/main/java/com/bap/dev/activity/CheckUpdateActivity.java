@@ -72,7 +72,7 @@ public class CheckUpdateActivity implements StartupActivity {
 
                 // 通知用户已自动添加
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    NotificationGroup group = NotificationGroupManager.getInstance().getNotificationGroup("Cloud Project Download");
+                    NotificationGroup group = NotificationGroupManager.getInstance().getNotificationGroup("Bap Notification");
                     if (group != null) {
                         Notification n = group.createNotification(
                                 BapBundle.message("title.plugin_update"),
@@ -182,7 +182,7 @@ public class CheckUpdateActivity implements StartupActivity {
     }
 
     private static void showUpdateNotification(@Nullable Project project, String current, RepoEntry latest) {
-        NotificationGroup group = NotificationGroupManager.getInstance().getNotificationGroup("Cloud Project Download");
+        NotificationGroup group = NotificationGroupManager.getInstance().getNotificationGroup("Bap Notification");
         if (group == null) return;
 
         String notesHtml = "";

@@ -183,7 +183,7 @@ public class AdminToolLauncher {
 
     private static void sendNotification(Project project, String title, String content) {
         Notification notification = new Notification(
-                BapBundle.message("notification.group.cloud.download"), // "Cloud Project Download"
+                BapBundle.message("notification.group.bap"), // "Cloud Project Download"
                 title, content, NotificationType.INFORMATION);
         Notifications.Bus.notify(notification, project);
     }

@@ -154,7 +154,7 @@ public class PublishProjectAction extends AnAction {
 
     private void sendNotification(Project project, String title, String content) {
         Notification notification = new Notification(
-                BapBundle.message("notification.group.cloud.download"), // 修改12: 复用 common 中的 group id,
+                BapBundle.message("notification.group.bap"), // 修改12: 复用 common 中的 group id,
                 title,
                 content,
                 NotificationType.INFORMATION

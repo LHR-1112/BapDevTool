@@ -14,9 +14,9 @@
                                  id="com.bap.dev.settings.BapSettingsConfigurable"
                                  key="configurable.BapSettingsConfigurable.display_name"/>
         <projectViewNodeDecorator implementation="com.bap.dev.ui.BapProjectDecorator"/>
-        <notificationGroup id="Cloud Project Download"
+        <notificationGroup id="Bap Notification"
                            displayType="BALLOON"
-                           key="notification.group.cloud.download"/>
+                           key="notification.group.bap"/>
         <postStartupActivity implementation="com.bap.dev.activity.BapStartupActivity"/>
         <toolWindow id="Bap Changes"
                     secondary="false"
@@ -24,9 +24,6 @@
                     anchor="left"
                     factoryClass="com.bap.dev.ui.BapToolWindowFactory"/>
         <postStartupActivity implementation="com.bap.dev.activity.CheckUpdateActivity"/>
-        <notificationGroup id="Bap Update Notification"
-                           displayType="BALLOON"
-                           key="bap.update.notification"/>
     </extensions>
 
     <projectListeners>

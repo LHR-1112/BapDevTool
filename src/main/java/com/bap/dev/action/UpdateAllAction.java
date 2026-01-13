@@ -360,7 +360,7 @@ public class UpdateAllAction extends AnAction {
     }
 
     private void sendNotification(Project project, String title, String content, NotificationType type) {
-        Notification notification = new Notification("Cloud Project Download", title, content, type);
+        Notification notification = new Notification(BapBundle.message("notification.group.bap"), title, content, type);
         Notifications.Bus.notify(notification, project);
     }
 

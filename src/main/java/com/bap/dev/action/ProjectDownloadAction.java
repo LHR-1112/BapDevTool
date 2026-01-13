@@ -52,7 +52,6 @@ import java.util.List;
 // 1. 实现 DumbAware
 public class ProjectDownloadAction extends AnAction implements DumbAware {
 
-    private static final String NOTIFICATION_GROUP_ID = "Cloud Project Download";
     private static final String PREF_URI = "practicalTool.uri";
     private static final String PREF_USER = "practicalTool.user";
 
@@ -368,7 +367,7 @@ public class ProjectDownloadAction extends AnAction implements DumbAware {
     }
 
     private void sendNotification(Project project, String title, String content, NotificationType type) {
-        Notification notification = new Notification(NOTIFICATION_GROUP_ID, title, content, type);
+        Notification notification = new Notification(BapBundle.message("notification.group.bap"), title, content, type);
         Notifications.Bus.notify(notification, project);
     }
 }
