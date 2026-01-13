@@ -16,6 +16,11 @@ public class BapProjectDecorator implements ProjectViewNodeDecorator {
 
     @Override
     public void decorate(ProjectViewNode<?> node, PresentationData data) {
+        // 🔴 核心修改：检查配置开关
+        if (!BapSettingsState.getInstance().showProjectTreeStatus) {
+            return; // 如果开关关闭，直接退出，不改变原有样式
+        }
+
         Project project = node.getProject();
         VirtualFile file = node.getVirtualFile();
         if (project == null || file == null) return;

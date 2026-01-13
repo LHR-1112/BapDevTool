@@ -3,6 +3,7 @@ package com.bap.dev.settings;
 import com.bap.dev.activity.CheckUpdateActivity; // 引入检查更新类
 import com.bap.dev.i18n.BapBundle;
 import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColorPanel;
 import com.intellij.ui.JBColor;
@@ -23,11 +24,10 @@ public class BapSettingsConfigurable implements Configurable {
 
     private JBCheckBox compileOnPublishCheckbox;
     private JBCheckBox autoRefreshCheckbox;
-    private JBCheckBox checkUpdateCheckbox;
-
-    // --- 🔴 新增 UI 组件 ---
     private JBCheckBox confirmCommitCheckbox;
+    private JBCheckBox checkUpdateCheckbox;
     private JBCheckBox showProjectNodeActionsCheckBox;
+    private JBCheckBox showProjectTreeStatusCheckBox;
 
     private ColorPanel modifiedColorPanel;
     private ColorPanel addedColorPanel;
@@ -44,18 +44,43 @@ public class BapSettingsConfigurable implements Configurable {
     @Override
     public @Nullable JComponent createComponent() {
         compileOnPublishCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.compile_on_publish")); // "发布时自动编译"
+
         autoRefreshCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.auto_refresh")); // "自动刷新文件状态"
         autoRefreshCheckbox.setToolTipText(BapBundle.message("configurable.BapSettingsConfigurable.tooltip.auto_refresh")); // "开启后..."
+        autoRefreshCheckbox.addActionListener(e -> {
+            if (autoRefreshCheckbox.isSelected()) {
+                int result = Messages.showYesNoDialog(
+                        BapBundle.message("configurable.BapSettingsConfigurable.performance_warning.message"),
+                        BapBundle.message("configurable.BapSettingsConfigurable.performance_warning.title"),
+                        Messages.getWarningIcon()
+                );
 
-        // --- 🔴 初始化新增组件 ---
-        checkUpdateCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.check_update")); // "启动时自动检查更新"
+                // 如果用户点击“否”或关闭窗口，则取消勾选
+                if (result != Messages.YES) {
+                    autoRefreshCheckbox.setSelected(false);
+                }
+            }
+        });
 
-        // --- 🔴 初始化组件 ---
         confirmCommitCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.confirm_commit"));
-        // -------------------
-
         showProjectNodeActionsCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_project_node_actions")); // "显示工程节点右侧操作按钮"
+        showProjectTreeStatusCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_file_status_in_file_tree"));   // "在项目树中显示文件状态"
+        showProjectTreeStatusCheckBox.addActionListener(e -> {
+            if (showProjectTreeStatusCheckBox.isSelected()) {
+                int result = Messages.showYesNoDialog(
+                        BapBundle.message("configurable.BapSettingsConfigurable.conflict_warning.message"),
+                        BapBundle.message("configurable.BapSettingsConfigurable.conflict_warning.title"),
+                        Messages.getWarningIcon()
+                );
 
+                // 如果用户点击“否”或关闭窗口，则取消勾选
+                if (result != Messages.YES) {
+                    showProjectTreeStatusCheckBox.setSelected(false);
+                }
+            }
+        });
+
+        checkUpdateCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.check_update")); // "启动时自动检查更新"
         JButton checkUpdateBtn = new JButton(BapBundle.message("title.check_update")); // "检查更新"
         checkUpdateBtn.addActionListener(e -> {
             // 传入 null project (因为这是 Application 级别的设置页)，isManual = true
@@ -86,14 +111,16 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(compileOnPublishCheckbox)
                 .addComponent(autoRefreshCheckbox)
                 .addComponent(confirmCommitCheckbox) // 🔴 添加到面板
-                .addComponent(updatePanel) // 添加更新配置行
                 .addComponent(showProjectNodeActionsCheckBox) // 添加更新配置行
+                .addComponent(showProjectTreeStatusCheckBox) // 添加更新配置行
                 .addSeparator()
                 .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.modified_color"), createColorRow(modifiedColorPanel, JBColor.YELLOW)) // "Modified color:"
                 .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.added_color"), createColorRow(addedColorPanel, JBColor.BLUE))       // "Added color:"
                 .addLabeledComponent(BapBundle.message("configurable.BapSettingsConfigurable.label.deleted_color"), createColorRow(deletedColorPanel, JBColor.RED))    // "Deleted color:"
                 .addSeparator()
                 .addLabeledComponentFillVertically(BapBundle.message("configurable.BapSettingsConfigurable.label.uri_history"), uriListPanel) // "Server URI History:"
+                .addSeparator()
+                .addComponent(updatePanel) // 添加更新配置行
                 .getPanel();
     }
 
@@ -111,14 +138,12 @@ public class BapSettingsConfigurable implements Configurable {
     public boolean isModified() {
         BapSettingsState settings = BapSettingsState.getInstance();
 
-        boolean checkboxModified = compileOnPublishCheckbox.isSelected() != settings.compileOnPublish;
+        boolean compileOnPublishModified = compileOnPublishCheckbox.isSelected() != settings.compileOnPublish;
         boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
-        // --- 🔴 检查新增配置 ---
-        boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
-        // --- 🔴 检查修改 ---
         boolean confirmCommitModified = confirmCommitCheckbox.isSelected() != settings.confirmBeforeCommit;
+        boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
         boolean showProjectNodeModified = showProjectNodeActionsCheckBox.isSelected() != settings.showProjectNodeActions;
-        // --------------------
+        boolean showProjectTreeStatusModified = showProjectTreeStatusCheckBox.isSelected() != settings.showProjectTreeStatus;
 
         List<String> currentStoredUris = settings.loginHistory.stream()
                 .map(p -> p.uri)
@@ -129,7 +154,8 @@ public class BapSettingsConfigurable implements Configurable {
                 !isColorEqual(addedColorPanel.getSelectedColor(), settings.getAddedColorObj()) ||
                 !isColorEqual(deletedColorPanel.getSelectedColor(), settings.getDeletedColorObj());
 
-        return checkboxModified || autoRefreshModified || confirmCommitModified || checkUpdateModified || showProjectNodeModified || listModified || colorModified;
+        return compileOnPublishModified || autoRefreshModified || confirmCommitModified || checkUpdateModified ||
+                showProjectNodeModified || showProjectTreeStatusModified || listModified || colorModified;
     }
 
     private boolean isColorEqual(Color c1, Color c2) {
@@ -141,13 +167,13 @@ public class BapSettingsConfigurable implements Configurable {
     @Override
     public void apply() {
         BapSettingsState settings = BapSettingsState.getInstance();
+
         settings.compileOnPublish = compileOnPublishCheckbox.isSelected();
         settings.autoRefresh = autoRefreshCheckbox.isSelected();
-        // --- 🔴 保存新增配置 ---
         settings.confirmBeforeCommit = confirmCommitCheckbox.isSelected();
         settings.checkUpdateOnStartup = checkUpdateCheckbox.isSelected();
-        // --------------------
         settings.showProjectNodeActions = showProjectNodeActionsCheckBox.isSelected();
+        settings.showProjectTreeStatus = showProjectTreeStatusCheckBox.isSelected();
 
         List<String> uiUris = uriListModel.getItems();
         List<BapSettingsState.LoginProfile> newHistory = new ArrayList<>();
@@ -169,12 +195,13 @@ public class BapSettingsConfigurable implements Configurable {
     @Override
     public void reset() {
         BapSettingsState settings = BapSettingsState.getInstance();
+
         compileOnPublishCheckbox.setSelected(settings.compileOnPublish);
         autoRefreshCheckbox.setSelected(settings.autoRefresh);
-        // --- 🔴 重置新增配置 ---
         confirmCommitCheckbox.setSelected(settings.confirmBeforeCommit);
         checkUpdateCheckbox.setSelected(settings.checkUpdateOnStartup);
-        // --------------------
+        showProjectNodeActionsCheckBox.setSelected(settings.showProjectNodeActions);
+        showProjectTreeStatusCheckBox.setSelected(settings.showProjectTreeStatus);
 
         uriListModel.removeAll();
         List<String> uris = settings.loginHistory.stream()
@@ -186,15 +213,17 @@ public class BapSettingsConfigurable implements Configurable {
         addedColorPanel.setSelectedColor(settings.getAddedColorObj());
         deletedColorPanel.setSelectedColor(settings.getDeletedColorObj());
 
-        showProjectNodeActionsCheckBox.setSelected(settings.showProjectNodeActions);
+
     }
 
     @Override
     public void disposeUIResources() {
         compileOnPublishCheckbox = null;
         autoRefreshCheckbox = null;
-        checkUpdateCheckbox = null;
         confirmCommitCheckbox = null;
+        checkUpdateCheckbox = null;
+        showProjectNodeActionsCheckBox = null;
+        showProjectTreeStatusCheckBox = null;
         modifiedColorPanel = null;
         addedColorPanel = null;
         deletedColorPanel = null;

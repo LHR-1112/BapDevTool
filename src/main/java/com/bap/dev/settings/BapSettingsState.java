@@ -23,17 +23,12 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public boolean compileOnPublish = true;
     public boolean autoRefresh = false;
     public boolean checkUpdateOnStartup = true;
-
-    // --- 🔴 新增：提交前是否需要确认 ---
     public boolean confirmBeforeCommit = true;
     public boolean showProjectNodeActions = true;
-
-    // --- 🔴 新增：是否扁平化展示包路径 ---
     public boolean flattenPackages = true;
-
+    public boolean showProjectTreeStatus = false;
     public List<LoginProfile> loginHistory = new ArrayList<>();
     public Map<String, List<RelocateProfile>> moduleRelocateHistory = new HashMap<>();
-
     public int modifiedColor = JBColor.YELLOW.getRGB();
     public int addedColor = JBColor.BLUE.getRGB();
     public int deletedColor = JBColor.RED.getRGB();

@@ -31,7 +31,6 @@ public class OpenAdminToolAction extends AnAction {
             return;
         }
 
-        // TODO 这里暂时用原来的方法打开BapMainFrame，后面要换成在Idea内部打开
         // 启动管理工具
         AdminToolLauncher.launch(project, moduleRoot);
     }
