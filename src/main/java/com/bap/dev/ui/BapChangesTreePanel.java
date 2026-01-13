@@ -500,14 +500,74 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         public ExpandAllAction() {
             super(BapBundle.message("action.expand_all"), BapBundle.message("ui.BapChangesTreePanel.action.expand.desc"), AllIcons.Actions.Expandall);
         }
-        @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.expandAll(tree); }
+
+        @Override
+        public void actionPerformed(@NotNull AnActionEvent e) {
+            // 1. 获取选中路径
+            TreePath[] selectionPaths = tree.getSelectionPaths();
+
+            if (selectionPaths != null && selectionPaths.length > 0) {
+                // 2. 有选中：递归展开选中的节点
+                for (TreePath path : selectionPaths) {
+                    expandNodeRecursively(path);
+                }
+            } else {
+                // 3. 无选中：展开全部
+                TreeUtil.expandAll(tree);
+            }
+        }
+
+        // 递归展开帮助方法
+        private void expandNodeRecursively(TreePath parentPath) {
+            // 先展开当前节点
+            tree.expandPath(parentPath);
+
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) parentPath.getLastPathComponent();
+            Enumeration<?> children = node.children();
+            while (children.hasMoreElements()) {
+                DefaultMutableTreeNode child = (DefaultMutableTreeNode) children.nextElement();
+                TreePath childPath = parentPath.pathByAddingChild(child);
+                expandNodeRecursively(childPath);
+            }
+        }
     }
 
     private class CollapseAllAction extends AnAction {
         public CollapseAllAction() {
             super(BapBundle.message("action.collapse_all"), BapBundle.message("ui.BapChangesTreePanel.action.collapse.desc"), AllIcons.Actions.Collapseall);
         }
-        @Override public void actionPerformed(@NotNull AnActionEvent e) { TreeUtil.collapseAll(tree, 0); }
+
+        @Override
+        public void actionPerformed(@NotNull AnActionEvent e) {
+            // 1. 获取选中路径
+            TreePath[] selectionPaths = tree.getSelectionPaths();
+
+            if (selectionPaths != null && selectionPaths.length > 0) {
+                // 2. 有选中：递归折叠选中的节点
+                for (TreePath path : selectionPaths) {
+                    collapseNodeRecursively(path);
+                }
+            } else {
+                // 3. 无选中：折叠全部 (保留根节点下的一级)
+                TreeUtil.collapseAll(tree, 0);
+            }
+        }
+
+        // 递归折叠帮助方法
+        private void collapseNodeRecursively(TreePath parentPath) {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) parentPath.getLastPathComponent();
+
+            // 后序遍历：先折叠子节点，再折叠自己，这样下次展开时子节点是收起状态
+            Enumeration<?> children = node.children();
+            while (children.hasMoreElements()) {
+                DefaultMutableTreeNode child = (DefaultMutableTreeNode) children.nextElement();
+                TreePath childPath = parentPath.pathByAddingChild(child);
+                collapseNodeRecursively(childPath);
+            }
+
+            // 折叠当前节点
+            tree.collapsePath(parentPath);
+        }
     }
 
     private class LocateCurrentFileAction extends AnAction {
