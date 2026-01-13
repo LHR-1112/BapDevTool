@@ -18,12 +18,10 @@
 ---
 
 ### ✅ 安装方式一：通过 GitHub 下载本地安装
-
-适用于 **首次使用** 或 **无法访问私有插件仓库** 的场景。
-
 #### 安装步骤
 
-1. 前往 GitHub Releases 页面，下载 **最新版本插件压缩包**
+1. 前往 GitHub Releases 页面，下载 **最新版本插件压缩包**  
+   [https://github.com/LHR-1112/BapDevTool/releases](https://github.com/LHR-1112/BapDevTool/releases)
 2. 打开 **IntelliJ IDEA**
 3. 进入  
    `Settings / Preferences` → `Plugins`
@@ -34,11 +32,8 @@
 
 ---
 
-### 🚀 安装方式二：通过私有插件仓库安装 / 自动更新（推荐长期使用）
-
-适用于 **团队内部使用**、**持续更新** 的场景，支持插件内 **一键更新并重启**。
-
-#### 一次性配置私有插件仓库
+### ✅ 安装方式二：通过私有插件仓库安装
+#### 安装步骤
 
 1. 打开 **IntelliJ IDEA**
 2. 进入  
@@ -46,13 +41,9 @@
 3. 点击右上角 **⚙️（齿轮）**
 4. 选择 **Manage Plugin Repositories...**
 5. 添加 **Bap 私有插件仓库地址**  
-   "https://lhr-1112.github.io/BapDevTool/plugins.xml"
+   [https://lhr-1112.github.io/BapDevTool/plugins.xml](https://lhr-1112.github.io/BapDevTool/plugins.xml)
 6. 确认并保存设置
-
-#### 安装 / 更新插件
-
-- 在插件市场中搜索 **BapDevPlugin** 并安装
-- 或在插件内使用 **一键更新并重启** 功能完成升级
+7. 在插件市场中搜索 **BapDevPlugin** 并安装
 
 ---
 
@@ -162,3 +153,4 @@
 如果您在使用过程中遇到任何问题或 BUG，欢迎通过以下渠道反馈：
 
 * **邮箱**: 2991747768@qq.com
+* **GitHub Issues**: [点击前往](https://github.com/LHR-1112/BapDevTool/issues)
