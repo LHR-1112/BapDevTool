@@ -116,19 +116,23 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
                 if (e.getClickCount() == 2) {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
                     if (path != null) {
-                        Object node = path.getLastPathComponent();
-                        if (node instanceof DefaultMutableTreeNode) {
-                            Object userObject = ((DefaultMutableTreeNode) node).getUserObject();
-                            if (userObject instanceof VirtualFileWrapper) {
-                                VirtualFile file = ((VirtualFileWrapper) userObject).file;
+                        DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                        Object userObject = node.getUserObject();
+
+                        if (userObject instanceof VirtualFileWrapper) {
+                            VirtualFileWrapper wrapper = (VirtualFileWrapper) userObject;
+                            VirtualFile file = wrapper.file;
+
+                            // 1. 蓝A (Added): 打开本地文件编辑器
+                            if (wrapper.status == BapFileStatus.ADDED) {
                                 if (file.isValid() && !file.isDirectory()) {
-                                    AnAction compareAction = ActionManager.getInstance().getAction("com.bap.dev.action.CompareJavaCodeAction");
-                                    if (compareAction != null) {
-                                        DataContext dataContext = DataManager.getInstance().getDataContext(tree);
-                                        AnActionEvent event = AnActionEvent.createFromAnAction(compareAction, e, ActionPlaces.TOOLWINDOW_CONTENT, dataContext);
-                                        compareAction.actionPerformed(event);
-                                    }
+                                    FileEditorManager.getInstance(project).openFile(file, true);
                                 }
+                            }
+                            // 2. 黄M (Modified) 或 红D (Deleted): 打开对比 Action
+                            // 对于红D，CompareAction 会显示本地为空 vs 云端代码，实现了“查看云端版本”的效果
+                            else if (wrapper.status == BapFileStatus.MODIFIED || wrapper.status == BapFileStatus.DELETED_LOCALLY) {
+                                runAction("com.bap.dev.action.CompareJavaCodeAction", e);
                             }
                         }
                     }

@@ -21,7 +21,6 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
@@ -53,54 +52,8 @@ public class CompareJavaCodeAction extends AnAction {
             return;
         }
 
-        // 3. 解析全类名 (修复版)
-        String fullClassName = ReadAction.compute(() -> {
-            if (!selectedFile.isValid()) return null;
-
-            // A. 优先尝试 PSI 解析 (适用于有内容的正常文件)
-            if (selectedFile.getLength() > 0) {
-                PsiFile psiFile = PsiManager.getInstance(project).findFile(selectedFile);
-                if (psiFile instanceof PsiJavaFile) {
-                    PsiJavaFile javaFile = (PsiJavaFile) psiFile;
-                    String packageName = javaFile.getPackageName();
-                    String className = selectedFile.getNameWithoutExtension();
-                    if (packageName != null && !packageName.isEmpty()) {
-                        return packageName + "." + className;
-                    }
-                }
-            }
-
-            // B. 兜底逻辑：通过文件路径推断 (适用于空文件/红D文件)
-            VirtualFile parent = selectedFile.getParent();
-            VirtualFile srcDir = null;
-
-            // 向上寻找 "src" 目录
-            while (parent != null) {
-                if ("src".equals(parent.getName())) {
-                    srcDir = parent;
-                    break;
-                }
-                parent = parent.getParent();
-            }
-
-            if (srcDir != null) {
-                // pathFromSrc 例如: "core/rda/dtos/A.java"
-                String pathFromSrc = VfsUtilCore.getRelativePath(selectedFile, srcDir);
-                if (pathFromSrc != null) {
-                    // 去掉第一层目录 (core)，保留后面作为包名
-                    int firstSlash = pathFromSrc.indexOf('/');
-                    if (firstSlash > 0) {
-                        String packagePath = pathFromSrc.substring(firstSlash + 1); // "rda/dtos/A.java"
-                        if (packagePath.endsWith(".java") || packagePath.endsWith(".JAVA")) {
-                            packagePath = packagePath.substring(0, packagePath.length() - 5);
-                        }
-                        return packagePath.replace('/', '.'); // "rda.dtos.A"
-                    }
-                }
-            }
-
-            return null;
-        });
+        // 3. 解析全类名 (修复版：使用字符串路径兜底)
+        String fullClassName = resolveClassName(project, selectedFile);
 
         if (fullClassName == null) {
             Messages.showWarningDialog(BapBundle.message("action.CompareJavaCodeAction.warning.invalid_classname"), BapBundle.message("notification.error_title"));
@@ -136,15 +89,16 @@ public class CompareJavaCodeAction extends AnAction {
             return;
         }
 
+        // 获取共享连接
         BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
         try {
-            client.connect(uri, user, pwd);
+            // client.connect(uri, user, pwd); // SharedClient 内部已管理连接状态，通常无需手动 connect，除非是为了触发重连逻辑
             Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
 
             String remoteCodeContent = null;
             if (remoteObj != null) {
                 if (remoteObj instanceof CJavaCode) {
-                    remoteCodeContent = ((CJavaCode) remoteObj).getCode(); // 注意: 这里可能需要 getCode() 方法
+                    remoteCodeContent = ((CJavaCode) remoteObj).getCode();
                 } else {
                     remoteCodeContent = getFieldString(remoteObj, "code");
                 }
@@ -161,14 +115,21 @@ public class CompareJavaCodeAction extends AnAction {
 
         } catch (Exception e) {
             showError(project, BapBundle.message("error.rpc_failed", e.getMessage()));
-        } finally {
-            client.shutdown();
         }
+        // 🔴 修复：移除 finally { client.shutdown(); }，共享连接不能关闭！
     }
 
     private void showDiffWindow(Project project, VirtualFile localFile, String remoteContent) {
         DiffContentFactory contentFactory = DiffContentFactory.getInstance();
-        DiffContent localDiffContent = contentFactory.create(project, localFile);
+
+        // 针对“红D”文件（内容为空/不存在），LocalDiffContent 应该是空的
+        DiffContent localDiffContent;
+        if (!localFile.exists() || localFile.getLength() == 0) {
+            localDiffContent = contentFactory.create(project, "", JavaFileType.INSTANCE);
+        } else {
+            localDiffContent = contentFactory.create(project, localFile);
+        }
+
         DiffContent remoteDiffContent = contentFactory.create(project, remoteContent, JavaFileType.INSTANCE);
 
         SimpleDiffRequest request = new SimpleDiffRequest(
@@ -180,6 +141,66 @@ public class CompareJavaCodeAction extends AnAction {
         );
 
         DiffManager.getInstance().showDiff(project, request);
+    }
+
+    // --- 🔴 修复：基于字符串路径的类名解析 (兼容红D/Deleted文件) ---
+    private String resolveClassName(Project project, VirtualFile file) {
+        return ReadAction.compute(() -> {
+            // A. 优先 PSI 解析 (文件存在且有内容)
+            if (file.isValid() && file.getLength() > 0) {
+                PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+                if (psiFile instanceof PsiJavaFile) {
+                    PsiJavaFile javaFile = (PsiJavaFile) psiFile;
+                    String packageName = javaFile.getPackageName();
+                    String className = file.getNameWithoutExtension();
+                    if (!packageName.isEmpty()) {
+                        return packageName + "." + className;
+                    }
+                }
+            }
+
+            // B. 兜底逻辑：字符串路径解析
+            VirtualFile parent = file.getParent();
+            VirtualFile srcDir = null;
+
+            // 1. 尝试向上找 src
+            while (parent != null) {
+                if ("src".equals(parent.getName())) { srcDir = parent; break; }
+                parent = parent.getParent();
+            }
+
+            // 2. 如果父级链断了 (因为是 DeletedPlaceholderFile)，尝试从 ModuleRoot 找
+            if (srcDir == null) {
+                VirtualFile moduleRoot = findModuleRoot(file);
+                if (moduleRoot != null) {
+                    srcDir = moduleRoot.findChild("src");
+                }
+            }
+
+            if (srcDir == null) return null;
+
+            // 3. 计算相对路径
+            String srcPath = srcDir.getPath().replace('\\', '/');
+            String filePath = file.getPath().replace('\\', '/'); // 红D文件会返回构造时的绝对路径
+
+            if (!filePath.startsWith(srcPath)) return null;
+
+            String relative = filePath.substring(srcPath.length());
+            if (relative.startsWith("/")) relative = relative.substring(1);
+            if (relative.isEmpty()) return null;
+
+            // relative: "core/com/bap/Test.java" -> 去掉第一层 "core"
+            int slash = relative.indexOf('/');
+            if (slash > 0) {
+                String pkgPath = relative.substring(slash + 1);
+                if (pkgPath.toLowerCase().endsWith(".java")) {
+                    pkgPath = pkgPath.substring(0, pkgPath.length() - 5);
+                }
+                return pkgPath.replace('/', '.');
+            }
+
+            return null;
+        });
     }
 
     @Override
