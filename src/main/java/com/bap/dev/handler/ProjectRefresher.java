@@ -211,7 +211,17 @@ public class ProjectRefresher {
     // --- 资源文件刷新逻辑 ---
     private void refreshResFolder(BapRpcClient client, String projectUuid, VirtualFile subDir, BapFileStatusService statusService) {
         try {
-            Map<String, FileDto> tempMap = client.getService().queryAllFileMap(projectUuid, "res");
+            Map<String, FileDto> tempMap;
+            try {
+                tempMap = client.getService().queryAllFileMap(projectUuid, "res");
+            } catch (Exception ex) {
+                // 云端没有 res 目录：视为云端空目录，而不是刷新失败
+                if (ex.getClass().getName().endsWith("NoFolderException")) {
+                    tempMap = new HashMap<>();
+                } else {
+                    throw ex;
+                }
+            }
             final Map<String, FileDto> cloudFileMap = (tempMap != null) ? tempMap : new HashMap<>();
             final Map<String, FileDto> missingLocalFilesMap = new HashMap<>(cloudFileMap);
 
@@ -239,7 +249,7 @@ public class ProjectRefresher {
                 createResourcePlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage())); // "Failed to refresh res folder: " + e.getMessage()
+            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage()),e); // "Failed to refresh res folder: " + e.getMessage()
         }
     }
 
@@ -289,7 +299,7 @@ public class ProjectRefresher {
                 createJavaPlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", client.getUri() + "_" + folderName)); // "Failed to refresh java folder: " + folderName
+            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", client.getUri() + "_" + folderName),e); // "Failed to refresh java folder: " + folderName
         }
     }
 
