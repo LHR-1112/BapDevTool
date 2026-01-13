@@ -13,6 +13,7 @@
         ]]></description>
         <change-notes><![CDATA[
 1.一键更新弃用原来的接口，改为私仓更新
+
     ]]></change-notes>
     </plugin>
 </plugins>
