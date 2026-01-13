@@ -42,6 +42,13 @@
 
 ## 📜 变更日志 (ChangeLog)
 
+### v1.3.1
+* **新特性**：新增设置：commit是否需要确认
+* **新特性**：新增两个动作：CommitFileAndPublishAction、CommitAllAndPublishAction
+* **特性修改**：更改右键菜单，BapChangesTreePanel的按钮图标及布局
+* **新特性**：BapChangesTreePanel文件增加包路径显示，不再平铺
+* **新特性**：BapChangesTreePanel添加switch：扁平化/树形展示包路径
+
 ### v1.3
 * **新特性**：BapChanges界面，在工程根节点上增加一些快捷操作
 * **新特性**：添加一键更新插件并重启的能力，同时保留github下载的入口

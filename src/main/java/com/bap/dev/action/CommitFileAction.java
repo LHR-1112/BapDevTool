@@ -141,41 +141,36 @@ public class CommitFileAction extends AnAction {
 
         String projectUuid = getProjectUuid(moduleRoot);
 
-        try {
-            List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
+        List<CJavaFolderDto> folders = client.getService().getFolders(projectUuid);
 
-            CommitPackage pkg = new CommitPackage();
-            pkg.setComments(comments);
+        CommitPackage pkg = new CommitPackage();
+        pkg.setComments(comments);
 
-            Map<String, List<CJavaCode>> mapFolder2Codes = new HashMap<>();
-            Map<String, Set<String>> deleteCodeMap = new HashMap<>();
-            Map<String, List<CResFileDto>> mapFolder2Files = new HashMap<>();
-            Map<String, Set<String>> deleteFileMap = new HashMap<>();
+        Map<String, List<CJavaCode>> mapFolder2Codes = new HashMap<>();
+        Map<String, Set<String>> deleteCodeMap = new HashMap<>();
+        Map<String, List<CResFileDto>> mapFolder2Files = new HashMap<>();
+        Map<String, Set<String>> deleteFileMap = new HashMap<>();
 
-            for (VirtualFile file : files) {
-                VirtualFile currentRoot = findModuleRoot(file);
-                if (currentRoot == null || !currentRoot.equals(moduleRoot)) continue;
+        for (VirtualFile file : files) {
+            VirtualFile currentRoot = findModuleRoot(file);
+            if (currentRoot == null || !currentRoot.equals(moduleRoot)) continue;
 
-                if (isResourceFile(currentRoot, file)) {
-                    prepareResource(project, client, projectUuid, currentRoot, file, folders, mapFolder2Files, deleteFileMap);
-                } else {
-                    prepareJava(project, client, projectUuid, currentRoot, file, folders, mapFolder2Codes, deleteCodeMap);
-                }
+            if (isResourceFile(currentRoot, file)) {
+                prepareResource(project, client, projectUuid, currentRoot, file, folders, mapFolder2Files, deleteFileMap);
+            } else {
+                prepareJava(project, client, projectUuid, currentRoot, file, folders, mapFolder2Codes, deleteCodeMap);
             }
-
-            pkg.setMapFolder2Codes(mapFolder2Codes);
-            pkg.setDeleteCodeMap(deleteCodeMap);
-            pkg.setMapFolder2Files(mapFolder2Files);
-            pkg.setDeleteFileMap(deleteFileMap);
-
-            client.getService().commitCode(projectUuid, pkg);
-
-            // 🔴 修改：传入 moduleRoot
-            onSuccess(project, files, moduleRoot);
-
-        } finally {
-            client.shutdown();
         }
+
+        pkg.setMapFolder2Codes(mapFolder2Codes);
+        pkg.setDeleteCodeMap(deleteCodeMap);
+        pkg.setMapFolder2Files(mapFolder2Files);
+        pkg.setDeleteFileMap(deleteFileMap);
+
+        client.getService().commitCode(projectUuid, pkg);
+
+        // 🔴 修改：传入 moduleRoot
+        onSuccess(project, files, moduleRoot);
     }
 
     // --- 资源文件准备 ---

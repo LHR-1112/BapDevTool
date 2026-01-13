@@ -70,6 +70,15 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.3.1</h3>
+            <ul>
+                <li><b>新特性</b>：新增设置：commit是否需要确认</li>
+                <li><b>新特性</b>：新增两个动作：CommitFileAndPublishAction、CommitAllAndPublishAction</li>
+                <li><b>特性修改</b>：更改右键菜单，BapChangesTreePanel的按钮图标及布局</li>
+                <li><b>新特性</b>：BapChangesTreePanel文件增加包路径显示，不再平铺</li>
+                <li><b>新特性</b>：BapChangesTreePanel添加switch：扁平化/树形展示包路径</li>
+            </ul>
+            
             <h3>v1.3</h3>
             <ul>
                 <li><b>新特性</b>：BapChanges界面，在工程根节点上增加一些快捷操作</li>

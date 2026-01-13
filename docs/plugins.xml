@@ -12,18 +12,11 @@
 基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
         <change-notes><![CDATA[
-1.BapChanges界面，在工程根节点上增加一些快捷操作
-2.添加一键更新插件并重启的能力，同时保留github下载的入口
-3.修改项目历史的查询逻辑，增加资源文件历史的展示
-4.修改文件历史的查询逻辑，增加资源文件历史的展示
-5.修复设置界面点击检查更新无反应的问题
-6.适配i18n
-7.BapChanges界面，Modified/Added/Deleted三个节点增加右键菜单
-8.文件状态检测过滤掉“.DS_Store”
-9.去除顶栏Bap目录和下载项目、设置选项的图标
-10.红D文件原来的逻辑是在本地的文件系统中添加一个空文件作为占位符，改成使用内存中的 LightVirtualFile 来代替物理文件进行展示，不再在本地生成占位缓存文件
-11.更新日志的打印方式
-12.修复在资源文件根目录的文件commit后会套上一个同名文件夹，导致Idea报错崩溃的问题
+1.新增设置：commit是否需要确认
+2.新增两个动作：CommitFileAndPublishAction、CommitAllAndPublishAction
+3.更改右键菜单，BapChangesTreePanel的按钮图标及布局
+4.BapChangesTreePanel文件增加包路径显示，不再平铺
+5.BapChangesTreePanel添加switch：扁平化/树形展示包路径
     ]]></change-notes>
     </plugin>
 </plugins>

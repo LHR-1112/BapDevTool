@@ -119,8 +119,6 @@ public class CommitAllAction extends AnAction {
                                 }
                             } catch (Exception ignore) {
                                 // 网络错误忽略，保持显示 UUID
-                            } finally {
-                                client.shutdown();
                             }
                         }
                     } catch (Exception ignore) {}
@@ -202,8 +200,6 @@ public class CommitAllAction extends AnAction {
                 } catch (Exception ex) {
                     ex.printStackTrace();
                     showError(BapBundle.message("action.CommitAllAction.error.commit_error") + ex.getMessage());
-                } finally {
-                    client.shutdown();
                 }
             }
         });

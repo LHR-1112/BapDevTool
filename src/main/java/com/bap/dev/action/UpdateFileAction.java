@@ -126,12 +126,11 @@ public class UpdateFileAction extends AnAction {
         });
     }
 
-    // --- 处理资源文件 (保持上次的修复版) ---
+    // --- 处理资源文件 ---
     private void updateResourceFile(Project project, VirtualFile moduleRoot, VirtualFile file) throws Exception {
         String relativePath = getResourceRelativePath(moduleRoot, file);
-        if (relativePath == null) throw new Exception(BapBundle.message("action.UpdateFileAction.error.calc_path")); // "无法计算资源路径"
+        if (relativePath == null) throw new Exception(BapBundle.message("action.UpdateFileAction.error.calc_path"));
 
-        // --- 🔴 修改开始：手动读取配置并使用 BapConnectionManager ---
         File confFile = new File(moduleRoot.getPath(), CJavaConst.PROJECT_DEVELOP_CONF_FILE);
         String content = Files.readString(confFile.toPath());
         String uri = extractAttr(content, "Uri");
@@ -139,36 +138,23 @@ public class UpdateFileAction extends AnAction {
         String pwd = extractAttr(content, "Password");
 
         BapRpcClient client = BapConnectionManager.getInstance(project).getSharedClient(uri, user, pwd);
-        // --- 🔴 修改结束 ---
-
         String projectUuid = getProjectUuid(moduleRoot);
-        try {
-            // 1. 尝试获取资源 (带内容 true)
-            CResFileDto resDto = client.getService().getResFile(projectUuid, relativePath, false);
 
-            if (resDto != null && resDto.getFileBin() != null) {
-                // A. 存在且有内容 -> 覆盖本地 (修复 黄M 和 红D)
-                overwriteFile(project, file, resDto.getFileBin());
+        // 🔴 修复：确保查询路径以 "/" 开头，否则服务器可能找不到文件 (针对红D恢复)
+        String queryPath = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
+
+        CResFileDto resDto = client.getService().getResFile(projectUuid, queryPath, false);
+
+        if (resDto != null && resDto.getFileBin() != null) {
+            overwriteFile(project, file, resDto.getFileBin());
+        } else {
+            BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
+            if (status == BapFileStatus.DELETED_LOCALLY) {
+                deleteLocalFile(project, file);
             } else {
-                // B. 云端不存在 (或内容为空)
-                BapFileStatus status = BapFileStatusService.getInstance(project).getStatus(file);
-
-                if (status == BapFileStatus.DELETED_LOCALLY) {
-                    // 如果本地是红D (本来就是空占位符)，且云端确实没有
-                    // 直接移除本地占位符
-                    deleteLocalFile(project, file);
-                } else {
-                    // 如果是蓝A (本地有，云端无)，或者普通文件被误删
-                    // 对于批量操作，不建议弹窗打断，这里直接跳过或者记录日志
-                    // 或者我们可以设定策略：Update 操作对于蓝A文件不做处理 (因为它本来就只在本地有)
-                    // 如果想强行同步（即删除本地），可以使用 deleteLocalFile(project, file);
-
-                    deleteLocalFile(project, file);
-                    LOG.info("Skipping local-only file: " + file.getName());
-                }
+                deleteLocalFile(project, file);
+                LOG.info("Skipping local-only file: " + file.getName());
             }
-        } finally {
-            client.shutdown();
         }
     }
 
@@ -189,29 +175,25 @@ public class UpdateFileAction extends AnAction {
 
         String projectUuid = getProjectUuid(moduleRoot);
 
-        try {
-            Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
-            String codeContent = null;
+        Object remoteObj = client.getService().getJavaCode(projectUuid, fullClassName);
+        String codeContent = null;
 
-            if (remoteObj != null) {
-                if (remoteObj instanceof CJavaCode) {
-                    codeContent = ((CJavaCode) remoteObj).code;
-                } else {
-                    try {
-                        java.lang.reflect.Field f = remoteObj.getClass().getField("code");
-                        codeContent = (String) f.get(remoteObj);
-                    } catch (Exception ignore) {}
-                }
-            }
-
-            if (codeContent != null) {
-                overwriteFile(project, file, codeContent.getBytes(StandardCharsets.UTF_8));
+        if (remoteObj != null) {
+            if (remoteObj instanceof CJavaCode) {
+                codeContent = ((CJavaCode) remoteObj).code;
             } else {
-                // 同上，对于 Java 文件，如果是本地新增的，Update 操作默认忽略
-                LOG.info("Skipping local-only file: " + file.getName());
+                try {
+                    java.lang.reflect.Field f = remoteObj.getClass().getField("code");
+                    codeContent = (String) f.get(remoteObj);
+                } catch (Exception ignore) {}
             }
-        } finally {
-            client.shutdown();
+        }
+
+        if (codeContent != null) {
+            overwriteFile(project, file, codeContent.getBytes(StandardCharsets.UTF_8));
+        } else {
+            // 同上，对于 Java 文件，如果是本地新增的，Update 操作默认忽略
+            LOG.info("Skipping local-only file: " + file.getName());
         }
     }
 
@@ -278,16 +260,22 @@ public class UpdateFileAction extends AnAction {
         return extractAttr(content, "Project");
     }
 
-    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null && VfsUtilCore.isAncestor(resDir, file, true);
+    // --- 🔴 新增：字符串路径辅助方法 ---
+    private String getResDirPath(VirtualFile moduleRoot) {
+        return moduleRoot.getPath().replace('\\', '/') + "/src/res";
     }
 
-    private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        if (resDir == null) return null;
+    // --- 🔴 修复：改用字符串判断 ---
+    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
+        String filePath = file.getPath().replace('\\', '/');
+        // 兼容: 直接是 src/res 本身，或是其子文件
+        return filePath.equals(resPath) || filePath.startsWith(resPath + "/");
+    }
 
-        String resPath = resDir.getPath().replace('\\', '/');
+    // --- 🔴 修复：改用字符串计算 ---
+    private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
         String filePath = file.getPath().replace('\\', '/');
 
         if (!filePath.startsWith(resPath)) return null;

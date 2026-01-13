@@ -150,7 +150,6 @@ public class UpdateAllAction extends AnAction {
                 } catch (Exception ex) {
                     showError(BapBundle.message("action.UpdateAllAction.error.batch_interrupt", ex.getMessage())); // "批量更新中断: " + ex.getMessage()
                 } finally {
-                    client.shutdown();
                     ApplicationManager.getApplication().invokeLater(() -> {
                         new ProjectRefresher(project).refreshModule(moduleRoot);
                         project.getMessageBus().syncPublisher(BapChangesNotifier.TOPIC).onChangesUpdated();
@@ -165,20 +164,17 @@ public class UpdateAllAction extends AnAction {
         String relativePath = getResourceRelativePath(moduleRoot, file);
         if (relativePath == null) return false;
 
-        // 1. 尝试获取资源 (带内容 true)
-        CResFileDto resDto = client.getService().getResFile(projectUuid, relativePath, false);
+        // 🔴 修复：确保查询路径以 "/" 开头
+        String queryPath = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
 
-        // --- 🔴 修复点：只要对象不为空，就视为存在 ---
+        CResFileDto resDto = client.getService().getResFile(projectUuid, queryPath, false);
+
         if (resDto != null) {
             byte[] content = resDto.getFileBin();
-            if (content == null) content = new byte[0]; // 防空处理
-
-            // Case: 黄M (修改) 或 红D (缺失) -> 还原/覆盖本地
+            if (content == null) content = new byte[0];
             overwriteFile(project, file, content);
             return true;
         } else {
-            // Case: 蓝A (新增) -> 云端真的没有 -> 删除本地
-            // Case: 红D 且云端没有 -> 删除本地占位符
             deleteLocalFile(project, file);
             return true;
         }
@@ -368,15 +364,29 @@ public class UpdateAllAction extends AnAction {
         Notifications.Bus.notify(notification, project);
     }
 
-    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        return resDir != null && VfsUtilCore.isAncestor(resDir, file, true);
+    // --- 🔴 新增：字符串路径辅助方法 ---
+    private String getResDirPath(VirtualFile moduleRoot) {
+        return moduleRoot.getPath().replace('\\', '/') + "/src/res";
     }
 
+    // --- 🔴 修复：改用字符串判断 ---
+    private boolean isResourceFile(VirtualFile moduleRoot, VirtualFile file) {
+        String resPath = getResDirPath(moduleRoot);
+        String filePath = file.getPath().replace('\\', '/');
+        // 兼容: 直接是 src/res 本身，或是其子文件
+        return filePath.equals(resPath) || filePath.startsWith(resPath + "/");
+    }
+
+    // --- 🔴 修复：改用字符串计算 ---
     private String getResourceRelativePath(VirtualFile moduleRoot, VirtualFile file) {
-        VirtualFile resDir = moduleRoot.findFileByRelativePath("src/res");
-        if (resDir == null) return null;
-        return getPathRelativeTo(resDir, file);
+        String resPath = getResDirPath(moduleRoot);
+        String filePath = file.getPath().replace('\\', '/');
+
+        if (!filePath.startsWith(resPath)) return null;
+
+        String relative = filePath.substring(resPath.length());
+        if (relative.startsWith("/")) relative = relative.substring(1);
+        return relative.isEmpty() ? null : relative;
     }
 
     @Nullable
