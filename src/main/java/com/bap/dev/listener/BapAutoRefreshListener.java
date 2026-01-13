@@ -76,7 +76,7 @@ public class BapAutoRefreshListener implements BulkFileListener {
                 try {
                     refresher.refreshModule(moduleRoot);
                 } catch (Exception e) {
-                    LOG.error("自动刷新模块失败: " + moduleRoot.getName(), e);
+                    LOG.warn("自动刷新模块失败: " + moduleRoot.getName(), e);
                 }
             }
         }, 1000); // 设置 1秒 防抖延迟，避免频繁触发

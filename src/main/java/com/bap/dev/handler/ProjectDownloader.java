@@ -58,7 +58,7 @@ public class ProjectDownloader {
                     for (CJavaFolderDto f : allFolders) folderSet.add(f.getName());
                 }
             } catch (Exception e) {
-                LOG.error(BapBundle.message("handler.ProjectDownloader.error.fetch_folders")); // "Fetch folders failed, ignore."
+                LOG.warn(BapBundle.message("handler.ProjectDownloader.error.fetch_folders")); // "Fetch folders failed, ignore."
             }
         }
 

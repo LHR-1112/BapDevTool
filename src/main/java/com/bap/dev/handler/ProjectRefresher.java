@@ -4,6 +4,7 @@ import bap.dev.FileDto;
 import bap.dev.JavaDto;
 import bap.java.CJavaCode;
 import bap.java.CJavaConst;
+import bap.java.NoFolderException;
 import com.bap.dev.BapRpcClient;
 import com.bap.dev.i18n.BapBundle;
 import com.bap.dev.listener.BapChangesNotifier;
@@ -28,6 +29,7 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileVisitor;
 import com.intellij.psi.PsiManager;
+import com.leavay.common.util.ToolUtilities;
 import cplugin.ms.dto.CResFileDto;
 import org.jetbrains.annotations.NotNull;
 
@@ -194,12 +196,13 @@ public class ProjectRefresher {
     private void showError(String title, String content, boolean silentMode) {
         if (silentMode) {
             // 静默模式下只打印 Log，不打扰用户
-            LOG.error("[" + title + "] " + content);
+            LOG.warn("[" + title + "] " + content);
         } else {
             // 手动模式下弹窗
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (!project.isDisposed()) {
                     Messages.showErrorDialog(project, content, title);
+
                 }
             });
         }
@@ -216,7 +219,8 @@ public class ProjectRefresher {
                 tempMap = client.getService().queryAllFileMap(projectUuid, "res");
             } catch (Exception ex) {
                 // 云端没有 res 目录：视为云端空目录，而不是刷新失败
-                if (ex.getClass().getName().endsWith("NoFolderException")) {
+                Throwable exceptionRootCause = ToolUtilities.getExceptionRootCause(ex);
+                if (NoFolderException.class.equals(exceptionRootCause.getClass())) {
                     tempMap = new HashMap<>();
                 } else {
                     throw ex;
@@ -249,7 +253,7 @@ public class ProjectRefresher {
                 createResourcePlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage()),e); // "Failed to refresh res folder: " + e.getMessage()
+            LOG.warn(BapBundle.message("handler.ProjectRefresher.log.refresh_res_fail", e.getMessage()),e); // "Failed to refresh res folder: " + e.getMessage()
         }
     }
 
@@ -299,7 +303,7 @@ public class ProjectRefresher {
                 createJavaPlaceholders(subDir, missingLocalFilesMap, statusService);
             }
         } catch (Exception e) {
-            LOG.error(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", client.getUri() + "_" + folderName),e); // "Failed to refresh java folder: " + folderName
+            LOG.warn(BapBundle.message("handler.ProjectRefresher.log.refresh_java_fail", client.getUri() + "_" + folderName),e); // "Failed to refresh java folder: " + folderName
         }
     }
 
