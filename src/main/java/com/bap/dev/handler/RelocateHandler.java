@@ -34,7 +34,7 @@ public class RelocateHandler {
 
         // 1. 读取当前配置 (为了获取默认 AdminTool 和做对比)
         String oldContent = "";
-        String defUri = "", defUser = "", defPwd = "", defAdminTool = "bap.client.BapMainFrame";
+        String defUri = "", defUser = "", defPwd = "", defAdminTool = "bap.client.BapMainFrame", defRemark = "";
 
         if (confFile.exists()) {
             try {
@@ -50,6 +50,7 @@ public class RelocateHandler {
         }
 
         final String finalAdminTool = defAdminTool; // 供后续使用
+        final String finalRemark = defRemark; // 供后续使用
 
         // --- 🔴 Step 0: 检查历史记录 ---
         List<BapSettingsState.RelocateProfile> history = BapSettingsState.getInstance().getRelocateHistory(modulePath);
@@ -132,7 +133,7 @@ public class RelocateHandler {
 
                                     // --- 🔴 成功后保存到历史记录 ---
                                     BapSettingsState.RelocateProfile profile = new BapSettingsState.RelocateProfile(
-                                            newUri, newUser, newPwd, selected.getUuid(), selected.getName(), finalAdminTool
+                                            newUri, newUser, newPwd, selected.getUuid(), selected.getName(), finalAdminTool, finalRemark
                                     );
                                     BapSettingsState.getInstance().addRelocateHistory(modulePath, profile);
                                     // ----------------------------

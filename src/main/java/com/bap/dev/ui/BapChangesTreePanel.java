@@ -942,7 +942,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
         public ToggleFlattenPackagesAction() {
             // 使用 IntelliJ 自带的 "Flatten Packages" 图标
             super(BapBundle.message("ui.BapChangesTreePanel.flatten_packages"), // 建议在 Bundle 中添加: "Flatten Packages" 或 "扁平化包路径"
-                    "Toggle flat package view",
+                    BapBundle.message("ui.BapChangesTreePanel.action.flatten.desc"),
                     AllIcons.ObjectBrowser.FlattenPackages);
         }
 
