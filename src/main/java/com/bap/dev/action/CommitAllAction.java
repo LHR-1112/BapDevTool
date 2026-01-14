@@ -536,8 +536,7 @@ public class CommitAllAction extends AnAction {
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
-            // 1) Prefer PSI when file has real content and belongs to LocalFileSystem
-            // (LightVirtualFile / missing files often can't be resolved via PSI)
+            // 1) 优先 PSI 解析 (保持不变)
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -548,19 +547,23 @@ public class CommitAllAction extends AnAction {
                 }
             }
 
-            // 2) Fallback: derive from absolute path under /src/<folderName>/
-            VirtualFile parent = file.getParent();
-            VirtualFile srcDir = null;
-            while (parent != null) {
-                if ("src".equals(parent.getName())) { srcDir = parent; break; }
-                parent = parent.getParent();
-            }
+            // 2) 兜底：路径计算
+            // 🔴 修复：不再向上遍历找 src，而是先找模块根，再找下面的 src
+            VirtualFile moduleRoot = findModuleRoot(file);
+            if (moduleRoot == null) return null;
+
+            VirtualFile srcDir = moduleRoot.findChild("src");
             if (srcDir == null) return null;
+
+            String srcPath = srcDir.getPath().replace('\\', '/');
+            String filePath = file.getPath().replace('\\', '/');
+
+            if (!filePath.startsWith(srcPath)) return null;
 
             String rel = getPathRelativeTo(srcDir, file);
             if (rel == null) return null;
 
-            // rel: "<folderName>/com/foo/Bar.java" -> "com.foo.Bar"
+            // rel: "<folderName>/com/foo/Bar.java"
             int slash = rel.indexOf('/');
             if (slash <= 0) return null;
 

@@ -13,7 +13,10 @@
         ]]></description>
         <change-notes><![CDATA[
 1.一键更新弃用原来的接口，改为私仓更新
-
+2.修改 BapChangesTreePanel 文件节点的双击逻辑
+3.工程重定向：修改新增连接的逻辑；增加属性：备注
+4.新增设置：在项目树中显示文件状态（处理与git的显示冲突）
+5.修复：无法删除src/src/目录下的文件
     ]]></change-notes>
     </plugin>
 </plugins>

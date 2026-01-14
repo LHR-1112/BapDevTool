@@ -392,7 +392,7 @@ public class CommitFileAction extends AnAction {
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
-            // 1) 有内容时优先走 PSI（最准确）
+            // 1) PSI 解析 (保持不变)
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -403,24 +403,12 @@ public class CommitFileAction extends AnAction {
                 }
             }
 
-            // 2) 红D / 无 PSI 时：用“路径字符串”计算，避免 LightFileSystem vs LocalFileSystem 导致的 relativePath=null
-            VirtualFile srcDir = null;
+            // 2) 路径计算
+            // 🔴 修复：直接基于模块根目录定位 src
+            VirtualFile moduleRoot = findModuleRoot(file);
+            if (moduleRoot == null) return null;
 
-            // 2.1 先尝试从 parent 链找到 src
-            VirtualFile parent = file.getParent();
-            while (parent != null) {
-                if ("src".equals(parent.getName())) { srcDir = parent; break; }
-                parent = parent.getParent();
-            }
-
-            // 2.2 如果 parent 链不可靠（例如 parent 被兜底成 moduleRoot），退化为从模块根目录找 src
-            if (srcDir == null) {
-                VirtualFile moduleRoot = findModuleRoot(file);
-                if (moduleRoot != null) {
-                    srcDir = moduleRoot.findChild("src");
-                }
-            }
-
+            VirtualFile srcDir = moduleRoot.findChild("src");
             if (srcDir == null) return null;
 
             String srcPath = srcDir.getPath().replace('\\', '/');
@@ -432,7 +420,7 @@ public class CommitFileAction extends AnAction {
             if (relative.startsWith("/")) relative = relative.substring(1);
             if (relative.isEmpty()) return null;
 
-            // 3) 关键：去掉 src 下的第一段目录（例如 src/java/... -> 去掉 "java"）
+            // 去掉第一层目录
             int slash = relative.indexOf('/');
             if (slash > 0) {
                 relative = relative.substring(slash + 1);

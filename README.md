@@ -51,7 +51,7 @@
 
 * **系统**: MacOS X
 * **CPU**: Apple Silicon M4
-* **IDE**: IntelliJ IDEA 2025.1.3 (Ultimate Edition)
+* **IDE**: IntelliJ IDEA 2025.3.1 (Ultimate Edition)
 * **JDK**: Oracle OpenJDK 24.0.1 - aarch64
 
 > ⚠️ **注意**: 当前版本仅在上述环境中进行过测试。若在其他环境中使用，可能会遇到兼容性问题。
@@ -69,6 +69,10 @@
 ## 📜 变更日志 (ChangeLog)
 ### v1.3.2
 * **特性修改**：一键更新弃用原来的接口，改为私仓更新
+* **特性修改**：修改 BapChangesTreePanel 文件节点的双击逻辑
+* **特性修改**：工程重定向：修改新增连接的逻辑；增加属性：备注
+* **特性修改**：新增设置：在项目树中显示文件状态（处理与git的显示冲突）
+* **bug修复**：无法删除src/src/目录下的文件
 
 ### v1.3.1
 * **新特性**：新增设置：commit是否需要确认

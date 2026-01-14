@@ -191,7 +191,8 @@ public class UpdateFileAction extends AnAction {
             overwriteFile(project, file, codeContent.getBytes(StandardCharsets.UTF_8));
         } else {
             // 同上，对于 Java 文件，如果是本地新增的，Update 操作默认忽略
-            LOG.info("Skipping local-only file: " + file.getName());
+            // 🔴 修复：服务器没有该文件 (蓝A)，执行 Update 意味着“还原到服务器状态”，即删除本地文件
+            deleteLocalFile(project, file);
         }
     }
 
@@ -285,7 +286,7 @@ public class UpdateFileAction extends AnAction {
 
     private String resolveClassName(Project project, VirtualFile file) {
         return ReadAction.compute(() -> {
-            // 1) 有内容时优先走 PSI（最准确）
+            // 1) PSI 解析 (保持不变)
             if (file.getLength() > 0) {
                 PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
                 if (psiFile instanceof PsiJavaFile) {
@@ -296,28 +297,16 @@ public class UpdateFileAction extends AnAction {
                 }
             }
 
-            // 2) 红D / 无 PSI 时：用“路径字符串”计算，避免 LightFileSystem vs LocalFileSystem 导致的 relativePath=null
-            VirtualFile srcDir = null;
+            // 2) 路径计算
+            // 🔴 修复：删除原有的 parent 遍历逻辑，统一使用 findModuleRoot
+            VirtualFile moduleRoot = findModuleRoot(file);
+            if (moduleRoot == null) return null;
 
-            // 2.1 先尝试从 parent 链找到 src
-            VirtualFile parent = file.getParent();
-            while (parent != null) {
-                if ("src".equals(parent.getName())) { srcDir = parent; break; }
-                parent = parent.getParent();
-            }
-
-            // 2.2 如果 parent 链不可靠（例如 parent 被兜底成 moduleRoot），退化为从模块根目录找 src
-            if (srcDir == null) {
-                VirtualFile moduleRoot = findModuleRoot(file);
-                if (moduleRoot != null) {
-                    srcDir = moduleRoot.findChild("src");
-                }
-            }
-
+            VirtualFile srcDir = moduleRoot.findChild("src");
             if (srcDir == null) return null;
 
             String srcPath = srcDir.getPath().replace('\\', '/');
-            String filePath = file.getPath().replace('\\', '/'); // BapDeletedVirtualFile 返回绝对路径
+            String filePath = file.getPath().replace('\\', '/');
 
             if (!filePath.startsWith(srcPath)) return null;
 
@@ -325,7 +314,6 @@ public class UpdateFileAction extends AnAction {
             if (relative.startsWith("/")) relative = relative.substring(1);
             if (relative.isEmpty()) return null;
 
-            // 3) 关键：去掉 src 下的第一段目录（例如 src/java/... -> 去掉 "java"）
             int slash = relative.indexOf('/');
             if (slash > 0) {
                 relative = relative.substring(slash + 1);
