@@ -107,10 +107,10 @@ public class AdminToolLauncher {
                 params.configureByModule(module, JavaParameters.JDK_AND_CLASSES);
             } else {
                 File libDir = new File(moduleRoot.getPath(), "lib");
-                addJarsFromDir(params, libDir);
-                addJarsFromDir(params, new File(libDir, "platform"));
-                addJarsFromDir(params, new File(libDir, "plugin"));
-                addJarsFromDir(params, new File(libDir, "project"));
+                addJarDirWildcard(params, libDir);
+                addJarDirWildcard(params, new File(libDir, "platform"));
+                addJarDirWildcard(params, new File(libDir, "plugin"));
+                addJarDirWildcard(params, new File(libDir, "project"));
             }
 
             // 3. 启动进程
@@ -169,6 +169,14 @@ public class AdminToolLauncher {
                 }
             }
         }
+    }
+
+    private static void addJarDirWildcard(JavaParameters params, File dir) {
+        if (dir == null || !dir.exists() || !dir.isDirectory()) return;
+
+        // JVM classpath wildcard：只写一个目录/*，由 JVM 自动展开该目录下所有 jar/zip
+        String wildcard = dir.getAbsolutePath() + File.separator + "*";
+        params.getClassPath().add(wildcard);
     }
 
     private static String extractAttr(String xml, String attr) {
