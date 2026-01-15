@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.3.2"
+version = "1.3.3"
 
 repositories {
     mavenCentral()
@@ -72,6 +72,11 @@ intellijPlatform {
         changeNotes = """
             <h3>v1.3.2</h3>
             <ul>
+                <li><b>bug修复</b>：修复启动管理工具时，命令行会拼接所有依赖jar包的绝对路径，导致在Windows上CreateProcess报206的问题</li>
+            </ul>
+            
+            <h3>v1.3.2</h3>
+            <ul>
                 <li><b>特性修改</b>：一键更新弃用原来的接口，改为私仓更新</li>
                 <li><b>特性修改</b>：修改 BapChangesTreePanel 文件节点的双击逻辑</li>
                 <li><b>特性修改</b>：工程重定向：修改新增连接的逻辑；增加属性：备注；</li>
@@ -102,72 +107,6 @@ intellijPlatform {
                 <li><b>特性修改</b>：红D文件原来的逻辑是在本地的文件系统中添加一个空文件作为占位符，改成使用内存中的 LightVirtualFile 来代替物理文件进行展示，不再在本地生成占位缓存文件</li>
                 <li><b>特性修改</b>：更新日志的打印方式</li>
                 <li><b>bug修复</b>：修复在资源文件根目录的文件commit后会套上一个同名文件夹，导致Idea报错崩溃的问题</li>
-            </ul>
-            
-            <h3>v1.2.4</h3>
-            <ul>
-                <li><b>特性修改</b>：commit的提示窗口，自动聚焦到commit按钮，而不是提交信息窗口</li>
-                <li><b>特性修改</b>：BapChanges在commit/update等操作之后，自动聚焦到项目节点</li>
-                <li><b>特性修改</b>：代码Debug面板增加Rerun，自动换行，导出等按钮</li>
-                <li><b>bug修复</b>：修复密码错误、无法连接时，刷新项目无提示</li>
-            </ul>
-            
-            <h3>v1.2.3</h3>
-            <ul>
-                <li><b>新特性</b>：工程relocate的历史记录，增加删除功能</li>
-                <li><b>bug修复</b>：更新依赖jar包：tcmcat-bap.jar</li>
-                <li><b>新特性</b>：下载工程的时候，加上进度条提醒和网速显示</li>
-                <li><b>新特性</b>：下载工程的时候，添加终止下载的能力</li>
-                <li><b>新特性</b>：拉取工程时提供选项：新建一个项目、作为当前项目的一个模块</li>
-                <li><b>新特性</b>：在首页添加“下载工程”按钮，方便新用户使用</li>
-                <li><b>新特性</b>：新增能力：云端调试（只要本地的代码类有Main方法就可以运行，通过Trace输出进行调试，参考管理工具中的JavaTool，无需发布插件）</li>
-            </ul>
-            
-            <h3>v1.2.2</h3>
-            <ul>
-                <li><b>新特性</b>：BapChanges界面，增加一键收缩、展开、定位按钮</li>
-                <li><b>特性修改</b>：BapChanges界面，双击文件直接弹出云端与本地的对比</li>
-                <li><b>bug修复</b>：蓝A的资源文件，点击update无法删除</li>
-                <li><b>新特性</b>：commit的时候，提示目标服务器与工程信息</li>
-                <li><b>特性修改</b>：修改设置界面中，颜色修改的属性名称</li>
-                <li><b>特性修改</b>：丰富BapChangesTreePanel的右键菜单，与项目树的保持一致</li>
-                <li><b>特性修改</b>：将部分操作获取BapClient的方法改为通过BapConnectionManager获取长连接</li>
-            </ul>
-            
-            <h3>v1.2.1</h3>
-            <ul>
-                <li><b>新特性</b>：设置中可更改文件状态的颜色</li>
-            </ul>
-            
-            <h3>v1.2</h3>
-            <ul>
-                <li><b>bug修复</b>：去除没用到的依赖jar</li>
-                <li><b>bug修复</b>：重新编排右键菜单选项的顺序</li>
-                <li><b>bug修复</b>：修复管理工具无法连接"wss://"类型的地址</li>
-                <li><b>新特性</b>：UpdateAll</li>
-                <li><b>新特性</b>：整合commit时的文件列表提示与comment填写</li>
-                <li><b>新特性</b>：工程重定向的历史记录</li>
-                <li><b>新特性</b>：插件版本更新提醒</li>
-                <li><b>新特性</b>：新增文件状态颜色的修改</li>
-            </ul>
-            
-            <h3>v1.1.2</h3>
-            <ul>
-                <li><b>新特性</b>：commit时的提交信息</li>
-                <li><b>bug修复</b>：解决无法记录提交历史记录的问题</li>
-            </ul>
-            
-            <h3>v1.1.1</h3>
-            <ul>
-                <li><b>bug修复</b>：支援至2022.3.2版本</li>
-                <li><b>bug修复</b>：解决管理工具无法显示的问题</li>
-            </ul>
-            
-            <h3>v1.1</h3>
-            <ul>
-                <li><b>新特性</b>：版本管理(历史查询、回滚、对比)</li>
-                <li><b>新特性</b>：自动刷新文件状态设置</li>
-                <li><b>bug修复</b>：修复发布自动编译失效问题</li>
             </ul>
         """.trimIndent()
     }
