@@ -70,7 +70,7 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
-            <h3>v1.3.2</h3>
+            <h3>v1.3.3</h3>
             <ul>
                 <li><b>bug修复</b>：修复启动管理工具时，命令行会拼接所有依赖jar包的绝对路径，导致在Windows上CreateProcess报206的问题</li>
             </ul>
