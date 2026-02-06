@@ -147,6 +147,7 @@ public class StartDebugAction extends AnAction {
         executeDebug(project, console, className, debugPackageName, modifiedCode, uri, user, pwd);
     }
 
+    // 🔴 核心修改：使用轮询机制替代 Thread.sleep
     private void executeDebug(Project project, ConsoleView console, String className, String debugPackageName, String code, String uri, String user, String pwd) {
         console.clear();
         console.print(BapBundle.message("action.StartDebugAction.console.preparing", className, debugPackageName), ConsoleViewContentType.SYSTEM_OUTPUT);
@@ -155,8 +156,9 @@ public class StartDebugAction extends AnAction {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 BapRpcClient client = new BapRpcClient();
+                String debugKey = null;
                 try {
-                    indicator.setText(BapBundle.message("progress.connecting")); // "Connecting..."
+                    indicator.setText(BapBundle.message("progress.connecting"));
                     client.connect(uri, user, pwd);
                     console.print(BapBundle.message("action.StartDebugAction.console.connected", uri), ConsoleViewContentType.SYSTEM_OUTPUT);
 
@@ -167,42 +169,67 @@ public class StartDebugAction extends AnAction {
                     javaCode.setUuid(UUID.randomUUID().toString().replace("-", "_"));
                     javaCode.setCode(code);
 
-                    indicator.setText(BapBundle.message("action.StartDebugAction.progress.executing")); // "Executing..."
+                    indicator.setText(BapBundle.message("action.StartDebugAction.progress.executing"));
                     console.print(BapBundle.message("action.StartDebugAction.console.upload_execute"), ConsoleViewContentType.SYSTEM_OUTPUT);
 
-                    String debugKey = client.getService().startDebugJava(javaCode, new URI(uri));
+                    debugKey = client.getService().startDebugJava(javaCode, new URI(uri));
 
                     if (debugKey == null) {
                         printError(console, BapBundle.message("action.StartDebugAction.error.null_key"));
                         return;
                     }
 
-                    Thread.sleep(800);
+                    // --- 🔴 轮询循环开始 ---
+                    while (true) {
+                        // 1. 检查用户是否点击取消
+                        if (indicator.isCanceled()) {
+                            console.print("\n" + BapBundle.message("action.StartDebugAction.console.canceled") + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+                            try {
+                                client.getService().terminateDebug(debugKey, 5000);
+                            } catch (Exception ignore) {}
+                            break;
+                        }
 
-                    List<CJavaDebuggerDto> allDebugger = client.getService().getAllDebugger(false);
-                    CJavaDebuggerDto debuggerDto = null;
-                    if (allDebugger != null) {
-                        for (CJavaDebuggerDto dto : allDebugger) {
-                            if (debugKey.equals(dto.getUuid())) {
-                                debuggerDto = dto;
-                                break;
+                        // 2. 拉取并打印日志 (Trace)
+                        try {
+                            // 注意：根据之前的代码，方法名可能是 popTrace 或 popDebugTrace，这里保持原文件中的 popTrace
+                            // 如果接口变了，请修改为 client.getService().popDebugTrace(debugKey)
+                            List<String> traces = client.getService().popTrace(debugKey);
+                            if (traces != null && !traces.isEmpty()) {
+                                // 在 UI 线程打印颜色日志
+                                ApplicationManager.getApplication().invokeLater(() -> {
+                                    for (String line : traces) {
+                                        printColoredLog(console, line);
+                                    }
+                                });
                             }
+                        } catch (Exception ignore) {}
+
+                        // 3. 获取当前状态
+                        int status = -1;
+                        try {
+                            status = client.getService().getStatus(debugKey);
+                        } catch (Exception e) {
+                            // 网络波动忽略，继续重试
+                        }
+
+                        // 4. 判断结束状态
+                        if (status == CJavaConst.STATUS_ERROR) {
+                            handleExecutionResult(client, debugKey, true);
+                            break;
+                        } else if (status == CJavaConst.STATUS_FINISHED) {
+                            handleExecutionResult(client, debugKey, false);
+                            break;
+                        }
+
+                        // 5. 间隔休眠
+                        try {
+                            Thread.sleep(300);
+                        } catch (InterruptedException e) {
+                            break;
                         }
                     }
-
-                    boolean isException = false;
-                    try { isException = client.getService().isException(debugKey); } catch (Exception ignore) {}
-
-                    Object result = null;
-                    try { result = client.getService().getResult(debugKey); } catch (Exception ignore) {}
-
-                    String resultText = "";
-                    try { resultText = client.getService().getResultText(debugKey); } catch (Exception ignore) {}
-
-                    List<String> traces = null;
-                    try { traces = client.getService().popTrace(debugKey); } catch (Exception ignore) {}
-
-                    printResult(console, debugKey, debuggerDto, isException, result, resultText, traces);
+                    // --- 🔴 轮询循环结束 ---
 
                 } catch (Exception ex) {
                     printError(console, BapBundle.message("action.StartDebugAction.error.execution_failed", ex.getMessage()));
@@ -210,6 +237,25 @@ public class StartDebugAction extends AnAction {
                 } finally {
                     client.shutdown();
                 }
+            }
+
+            // 辅助方法：处理最终结果
+            private void handleExecutionResult(BapRpcClient client, String debugKey, boolean isError) {
+                Object result = null;
+                String resultText = "";
+                try {
+                    result = client.getService().getResult(debugKey); // 或 getDebugResult
+                } catch (Exception ignore) {}
+
+                try {
+                    resultText = client.getService().getResultText(debugKey); // 或 getDebugResultText
+                } catch (Exception ignore) {}
+
+                // 最后再拉一次 Trace 防止遗漏
+                List<String> finalTraces = null;
+                try { finalTraces = client.getService().popTrace(debugKey); } catch (Exception ignore) {}
+
+                printResult(console, debugKey, null, isError, result, resultText, finalTraces);
             }
         });
     }
