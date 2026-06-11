@@ -73,6 +73,9 @@
             <action id="com.bap.dev.action.CompareJavaCodeAction"
                     class="com.bap.dev.action.CompareJavaCodeAction"
                     icon="AllIcons.Actions.Diff"/>
+            <action id="com.bap.dev.action.SyncPanelDtoAction"
+                    class="com.bap.dev.action.SyncPanelDtoAction"
+                    icon="AllIcons.Actions.Download"/>
             <action id="com.bap.dev.action.ShowHistoryAction"
                     class="com.bap.dev.action.ShowHistoryAction"
                     icon="AllIcons.Vcs.History"/>
