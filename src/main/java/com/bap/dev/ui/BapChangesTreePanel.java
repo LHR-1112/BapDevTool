@@ -645,6 +645,7 @@ public class BapChangesTreePanel extends SimpleToolWindowPanel implements Dispos
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.UpdateLibsAction"));
             group.add(am.getAction("com.bap.dev.action.UpdateAllAction"));
+            group.add(am.getAction("com.bap.dev.action.SyncPanelDtoAction"));
             group.addSeparator();
             group.add(am.getAction("com.bap.dev.action.ShowProjectHistoryAction"));
             group.addSeparator();
