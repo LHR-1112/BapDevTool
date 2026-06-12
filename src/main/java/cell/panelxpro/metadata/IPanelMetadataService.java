@@ -2,6 +2,7 @@ package cell.panelxpro.metadata;
 
 import bap.cells.Cells;
 import cell.CellIntf;
+import panelxpro.metadata.dto.RegisterFunctionResult;
 import panelxpro.metadata.dto.DomainInfoDto;
 import panelxpro.metadata.dto.DtoGenerateResultDto;
 import panelxpro.metadata.dto.PanelFieldDto;
@@ -30,4 +31,10 @@ public interface IPanelMetadataService extends CellIntf {
 	DtoGenerateResultDto generateDto(String panelCode, String domainCode) throws Exception;
 
 	DtoGenerateResultDto generateAllDtos(String domainCode) throws Exception;
+
+	DtoGenerateResultDto generateAllDataObjects(String domainCode) throws Exception;
+
+	RegisterFunctionResult registerFunction(String domainCode, String className, String methodName) throws Exception;
+
+	RegisterFunctionResult registerFunctions(String domainCode, String className) throws Exception;
 }

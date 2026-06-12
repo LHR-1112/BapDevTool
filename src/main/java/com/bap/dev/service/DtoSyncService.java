@@ -79,7 +79,7 @@ public class DtoSyncService {
 		List<DtoSyncEntry> result = new ArrayList<>();
 		Set<String> remoteFilePaths = new HashSet<>();
 
-		DtoGenerateResultDto dtoResult = service.generateAllDtos(domainCode);
+		DtoGenerateResultDto dtoResult = service.generateAllDataObjects(domainCode);
 		if (dtoResult != null && dtoResult.getFiles() != null) {
 			for (DtoGenerateResultDto.DtoFileEntry fileEntry : dtoResult.getFiles()) {
 				String localPath = calculateLocalPath(moduleRoot, fileEntry);
