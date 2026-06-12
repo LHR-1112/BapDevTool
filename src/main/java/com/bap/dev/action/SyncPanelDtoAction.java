@@ -140,10 +140,9 @@ public class SyncPanelDtoAction extends AnAction {
 
                         ApplicationManager.getApplication().invokeLater(() -> {
                             if (changedEntries.isEmpty()) {
-                                sendNotification(project,
-                                        BapBundle.message("dialog.dto.sync.title"),
+                                Messages.showInfoMessage(
                                         BapBundle.message("notification.dto.sync.noChanges"),
-                                        NotificationType.INFORMATION);
+                                        BapBundle.message("dialog.dto.sync.title"));
                                 metadataClient.shutdown();
                             } else {
                                 showSyncDialog(project, changedEntries, finalDomainCode,

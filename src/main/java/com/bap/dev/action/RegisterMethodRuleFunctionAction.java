@@ -137,7 +137,7 @@ public class RegisterMethodRuleFunctionAction extends AnAction {
 
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        return ActionUpdateThread.BGT;
+        return ActionUpdateThread.EDT;
     }
 
     private VirtualFile findModuleRoot(VirtualFile current) {

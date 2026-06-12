@@ -3,6 +3,7 @@ package cell.panelxpro.metadata;
 import bap.cells.Cells;
 import cell.CellIntf;
 import panelxpro.metadata.dto.RegisterFunctionResult;
+import panelxpro.metadata.dto.ListFunctionsResult;
 import panelxpro.metadata.dto.DomainInfoDto;
 import panelxpro.metadata.dto.DtoGenerateResultDto;
 import panelxpro.metadata.dto.PanelFieldDto;
@@ -26,7 +27,7 @@ public interface IPanelMetadataService extends CellIntf {
 
 	List<PanelInfoDto> listPanels(String domainCode) throws Exception;
 
-	List<PanelFieldDto> getFormStructure(String modelId) throws Exception;
+	List<PanelFieldDto> getFormStructure(String domainCode, String panelCode) throws Exception;
 
 	DtoGenerateResultDto generateDto(String panelCode, String domainCode) throws Exception;
 
@@ -37,4 +38,6 @@ public interface IPanelMetadataService extends CellIntf {
 	RegisterFunctionResult registerFunction(String domainCode, String className, String methodName) throws Exception;
 
 	RegisterFunctionResult registerFunctions(String domainCode, String className) throws Exception;
+
+	ListFunctionsResult listFunctions(String domainCode) throws Exception;
 }
