@@ -8,6 +8,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -63,6 +64,12 @@ public class UpdateFileAction extends AnAction {
             );
             return;
         }
+
+        // --- 🔴 新增：根据配置决定是否弹窗 (与提交保持一致的二次确认) ---
+        if (BapSettingsState.getInstance().confirmBeforeUpdate) {
+            if (!showConfirmDialog(project, selectedFiles)) return;
+        }
+        // ---------------------------------
 
         // 2. 启动后台批量任务
         ProgressManager.getInstance().run(new Task.Backgroundable(project, BapBundle.message("action.UpdateFileAction.progress.title"), true) { // "Updating Files from Cloud..."
@@ -122,6 +129,36 @@ public class UpdateFileAction extends AnAction {
                 }
             }
         });
+    }
+
+    // --- 🔴 新增：更新前的二次确认弹窗 ---
+    private boolean showConfirmDialog(Project project, VirtualFile[] files) {
+        BapFileStatusService statusService = BapFileStatusService.getInstance(project);
+
+        StringBuilder sb = new StringBuilder(BapBundle.message("action.UpdateFileAction.dialog.confirm_msg"));
+        int count = 0;
+        for (VirtualFile f : files) {
+            if (f.isDirectory()) continue;
+
+            // 🔴 按路径取状态：红D 是 LightVirtualFile，只能靠 path 匹配
+            BapFileStatus status = statusService.getStatus(f.getPath());
+            String symbol = "[?]";
+            if (status == BapFileStatus.MODIFIED) symbol = BapBundle.message("action.StartDebugAction.symbol.modify");
+            if (status == BapFileStatus.ADDED) symbol = BapBundle.message("action.StartDebugAction.symbol.add");
+            if (status == BapFileStatus.DELETED_LOCALLY) symbol = BapBundle.message("action.StartDebugAction.symbol.delete");
+
+            sb.append(symbol).append(" ").append(f.getName()).append("\n");
+            if (++count > 15) {
+                sb.append(BapBundle.message("action.UpdateFileAction.dialog.confirm_more", files.length));
+                break;
+            }
+        }
+
+        return Messages.showOkCancelDialog(project, sb.toString(),
+                BapBundle.message("action.UpdateFileAction.dialog.confirm_title"),
+                BapBundle.message("action.UpdateFileAction.button.update_overwrite"),
+                BapBundle.message("button.cancel"),
+                Messages.getWarningIcon()) == Messages.OK;
     }
 
     // --- 处理资源文件 ---

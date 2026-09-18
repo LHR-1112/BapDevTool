@@ -25,6 +25,7 @@ public class BapSettingsConfigurable implements Configurable {
     private JBCheckBox compileOnPublishCheckbox;
     private JBCheckBox autoRefreshCheckbox;
     private JBCheckBox confirmCommitCheckbox;
+    private JBCheckBox confirmUpdateCheckbox;
     private JBCheckBox checkUpdateCheckbox;
     private JBCheckBox showProjectNodeActionsCheckBox;
     private JBCheckBox showProjectTreeStatusCheckBox;
@@ -63,6 +64,7 @@ public class BapSettingsConfigurable implements Configurable {
         });
 
         confirmCommitCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.confirm_commit"));
+        confirmUpdateCheckbox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.confirm_update")); // 🔴 新增：更新前确认
         showProjectNodeActionsCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_project_node_actions")); // "显示工程节点右侧操作按钮"
         showProjectTreeStatusCheckBox = new JBCheckBox(BapBundle.message("configurable.BapSettingsConfigurable.checkbox.show_file_status_in_file_tree"));   // "在项目树中显示文件状态"
         showProjectTreeStatusCheckBox.addActionListener(e -> {
@@ -111,6 +113,7 @@ public class BapSettingsConfigurable implements Configurable {
                 .addComponent(compileOnPublishCheckbox)
                 .addComponent(autoRefreshCheckbox)
                 .addComponent(confirmCommitCheckbox) // 🔴 添加到面板
+                .addComponent(confirmUpdateCheckbox) // 🔴 新增：更新前确认
                 .addComponent(showProjectNodeActionsCheckBox) // 添加更新配置行
                 .addComponent(showProjectTreeStatusCheckBox) // 添加更新配置行
                 .addSeparator()
@@ -141,6 +144,7 @@ public class BapSettingsConfigurable implements Configurable {
         boolean compileOnPublishModified = compileOnPublishCheckbox.isSelected() != settings.compileOnPublish;
         boolean autoRefreshModified = autoRefreshCheckbox.isSelected() != settings.autoRefresh;
         boolean confirmCommitModified = confirmCommitCheckbox.isSelected() != settings.confirmBeforeCommit;
+        boolean confirmUpdateModified = confirmUpdateCheckbox.isSelected() != settings.confirmBeforeUpdate;
         boolean checkUpdateModified = checkUpdateCheckbox.isSelected() != settings.checkUpdateOnStartup;
         boolean showProjectNodeModified = showProjectNodeActionsCheckBox.isSelected() != settings.showProjectNodeActions;
         boolean showProjectTreeStatusModified = showProjectTreeStatusCheckBox.isSelected() != settings.showProjectTreeStatus;
@@ -154,7 +158,7 @@ public class BapSettingsConfigurable implements Configurable {
                 !isColorEqual(addedColorPanel.getSelectedColor(), settings.getAddedColorObj()) ||
                 !isColorEqual(deletedColorPanel.getSelectedColor(), settings.getDeletedColorObj());
 
-        return compileOnPublishModified || autoRefreshModified || confirmCommitModified || checkUpdateModified ||
+        return compileOnPublishModified || autoRefreshModified || confirmCommitModified || confirmUpdateModified || checkUpdateModified ||
                 showProjectNodeModified || showProjectTreeStatusModified || listModified || colorModified;
     }
 
@@ -171,6 +175,7 @@ public class BapSettingsConfigurable implements Configurable {
         settings.compileOnPublish = compileOnPublishCheckbox.isSelected();
         settings.autoRefresh = autoRefreshCheckbox.isSelected();
         settings.confirmBeforeCommit = confirmCommitCheckbox.isSelected();
+        settings.confirmBeforeUpdate = confirmUpdateCheckbox.isSelected();
         settings.checkUpdateOnStartup = checkUpdateCheckbox.isSelected();
         settings.showProjectNodeActions = showProjectNodeActionsCheckBox.isSelected();
         settings.showProjectTreeStatus = showProjectTreeStatusCheckBox.isSelected();
@@ -199,6 +204,7 @@ public class BapSettingsConfigurable implements Configurable {
         compileOnPublishCheckbox.setSelected(settings.compileOnPublish);
         autoRefreshCheckbox.setSelected(settings.autoRefresh);
         confirmCommitCheckbox.setSelected(settings.confirmBeforeCommit);
+        confirmUpdateCheckbox.setSelected(settings.confirmBeforeUpdate);
         checkUpdateCheckbox.setSelected(settings.checkUpdateOnStartup);
         showProjectNodeActionsCheckBox.setSelected(settings.showProjectNodeActions);
         showProjectTreeStatusCheckBox.setSelected(settings.showProjectTreeStatus);

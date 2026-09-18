@@ -24,6 +24,7 @@ public class BapSettingsState implements PersistentStateComponent<BapSettingsSta
     public boolean autoRefresh = false;
     public boolean checkUpdateOnStartup = true;
     public boolean confirmBeforeCommit = true;
+    public boolean confirmBeforeUpdate = true;
     public boolean showProjectNodeActions = true;
     public boolean flattenPackages = true;
     public boolean showProjectTreeStatus = false;

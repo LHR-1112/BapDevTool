@@ -9,6 +9,7 @@ import com.bap.dev.listener.BapChangesNotifier;
 import com.bap.dev.service.BapConnectionManager;
 import com.bap.dev.service.BapFileStatus;
 import com.bap.dev.service.BapFileStatusService;
+import com.bap.dev.settings.BapSettingsState;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -84,7 +85,9 @@ public class UpdateAllAction extends AnAction {
                     }
 
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        if (showConfirmDialog(project, changedFiles)) {
+                        // 🔴 修改：根据配置决定是否弹窗 (与其他更新/提交入口保持一致的二次确认)
+                        boolean needConfirm = BapSettingsState.getInstance().confirmBeforeUpdate;
+                        if (!needConfirm || showConfirmDialog(project, changedFiles)) {
                             startBatchUpdate(project, moduleRoot, changedFiles);
                         }
                     });
