@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.bap.dev"
-version = "1.3.4"
+version = "1.3.5"
 
 repositories {
     mavenCentral()
@@ -70,6 +70,21 @@ intellijPlatform {
 
         // 2. ChangeNotes: 专门放变更日志 (通常只放最新几个版本或全部)
         changeNotes = """
+            <h3>v1.3.5</h3>
+            <ul>
+                <li><b>新特性</b>：更新（Update）操作增加二次确认弹窗，执行前按 [M 覆盖] / [A 删除] / [D 还原] 列出受影响文件清单</li>
+                <li><b>新特性</b>：新增设置"更新代码前显示确认弹窗"（默认开启）</li>
+                <li><b>特性修改</b>：Update All（拉取全部）的确认弹窗改为受上述设置控制</li>
+            </ul>
+
+            <h3>v1.3.4</h3>
+            <ul>
+                <li><b>新特性</b>：新增面板DTO同步功能，通过 RPC 批量拉取远程面板DTO源码到本地</li>
+                <li><b>新特性</b>：左侧包目录树 + 右侧嵌入式 Diff 对比面板，支持新增/修改/删除三种状态标记</li>
+                <li><b>新特性</b>：新增规则函数注册功能，支持类级别（注册全部方法）和方法级别（注册单个方法）</li>
+                <li><b>新特性</b>：新增独立"切换业务域"菜单项</li>
+            </ul>
+
             <h3>v1.3.3</h3>
             <ul>
                 <li><b>bug修复</b>：修复启动管理工具时，命令行会拼接所有依赖jar包的绝对路径，导致在Windows上CreateProcess报206的问题</li>
