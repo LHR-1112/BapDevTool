@@ -2,9 +2,9 @@
 <plugins>
     <plugin
             id="com.bap.dev.BapDevPlugin"
-            version="1.3.5"
-            url="http://cdn.lhr1112.top/plugins/BapDevTool-1.3.5.zip">
-        <backup-url>https://github.com/LHR-1112/BapDevTool/releases/download/v1.3.5/BapDevTool-1.3.5.zip</backup-url>
+            version="1.3.6"
+            url="http://cdn.lhr1112.top/plugins/BapDevTool-1.3.6.zip">
+        <backup-url>https://github.com/LHR-1112/BapDevTool/releases/download/v1.3.6/BapDevTool-1.3.6.zip</backup-url>
         <name>BapDevPlugin</name>
         <idea-version since-build="223.0"/>
         <vendor>LHR_1112</vendor>
@@ -12,10 +12,10 @@
 基于原有 Eclipse 云开发插件重构的 IntelliJ IDEA 版本。
         ]]></description>
         <change-notes><![CDATA[
-1.新增面板DTO同步功能，通过RPC批量拉取远程面板DTO源码到本地
-2.左侧包目录树+右侧嵌入式Diff对比面板，支持新增/修改/删除三种状态标记
-3.支持切换业务域（下拉选择，自动写入.develop配置）
-4.自动扫描本地孤儿DTO文件并标记为删除
-    ]]></change-notes>
+1.更新依赖前先做预检并弹窗提示将要更新的内容，下载完成后再给出精确数量二次确认，确认后才覆盖工程文件
+2.更新完成的通知中显示本次实际更新的 Jar 包数量（按平台/插件/项目/DAO 分类）
+3.修复开源源码包每次更新都全量重新下载约 9MB 的问题
+4.修复平台依赖包的增量包在特定情况下被静默丢弃的问题
+        ]]></change-notes>
     </plugin>
 </plugins>
